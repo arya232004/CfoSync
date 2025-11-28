@@ -1,0 +1,325 @@
+import { useState, useRef, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Link } from 'react-router-dom'
+import { 
+  Send, 
+  Brain, 
+  Sparkles, 
+  Menu,
+  X,
+  Home,
+  LayoutDashboard,
+  MessageSquare,
+  Settings,
+  User,
+  Trash2,
+  Bot
+} from 'lucide-react'
+import { useChatStore } from '../lib/store'
+import { sendChatMessage, Message } from '../lib/api'
+import { cn, formatDate, generateId, agentColors, agentIcons } from '../lib/utils'
+import toast from 'react-hot-toast'
+
+const sidebarItems = [
+  { icon: Home, label: 'Home', path: '/' },
+  { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
+  { icon: MessageSquare, label: 'AI Chat', path: '/chat', active: true },
+  { icon: User, label: 'Profile', path: '/onboarding' },
+  { icon: Settings, label: 'Settings', path: '#' },
+]
+
+const quickPrompts = [
+  "Analyze my financial health",
+  "Create a savings plan",
+  "What's my risk profile?",
+  "Help me budget for next month",
+  "Simulate my retirement",
+  "Check my cash flow",
+]
+
+export default function Chat() {
+  const [input, setInput] = useState('')
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  
+  const { messages, sessionId, isLoading, addMessage, setSessionId, setLoading, clearMessages } = useChatStore()
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
+
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages])
+
+  const handleSend = async () => {
+    if (!input.trim() || isLoading) return
+
+    const userMessage: Message = {
+      id: generateId(),
+      role: 'user',
+      content: input.trim(),
+      timestamp: new Date(),
+    }
+
+    addMessage(userMessage)
+    setInput('')
+    setLoading(true)
+
+    try {
+      const response = await sendChatMessage(input.trim(), sessionId || undefined)
+      
+      if (!sessionId) {
+        setSessionId(response.session_id)
+      }
+
+      const assistantMessage: Message = {
+        id: generateId(),
+        role: 'assistant',
+        content: response.response,
+        agent: response.agents_used?.[0] || 'coordinator',
+        timestamp: new Date(),
+      }
+
+      addMessage(assistantMessage)
+    } catch (error) {
+      console.error('Chat error:', error)
+      toast.error('Failed to get response. Make sure the backend is running.')
+      
+      // Add error message
+      const errorMessage: Message = {
+        id: generateId(),
+        role: 'assistant',
+        content: 'Sorry, I encountered an error. Please make sure the backend server is running on port 8000.',
+        agent: 'system',
+        timestamp: new Date(),
+      }
+      addMessage(errorMessage)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSend()
+    }
+  }
+
+  const handleQuickPrompt = (prompt: string) => {
+    setInput(prompt)
+  }
+
+  return (
+    <div className="min-h-screen flex">
+      {/* Sidebar */}
+      <AnimatePresence>
+        {sidebarOpen && (
+          <motion.aside
+            initial={{ x: -280 }}
+            animate={{ x: 0 }}
+            exit={{ x: -280 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            className="fixed md:relative z-40 w-[280px] h-screen glass-card rounded-none border-y-0 border-l-0 flex flex-col"
+          >
+            {/* Logo */}
+            <div className="p-6 border-b border-white/10">
+              <Link to="/" className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center">
+                  <Brain className="w-6 h-6 text-white" />
+                </div>
+                <span className="text-xl font-bold">CFOSync</span>
+              </Link>
+            </div>
+
+            {/* Navigation */}
+            <nav className="flex-1 p-4 space-y-2">
+              {sidebarItems.map((item, index) => (
+                <Link
+                  key={index}
+                  to={item.path}
+                  className={cn('sidebar-item', item.active && 'active')}
+                >
+                  <item.icon className="w-5 h-5" />
+                  <span>{item.label}</span>
+                </Link>
+              ))}
+            </nav>
+
+            {/* Clear Chat */}
+            <div className="p-4 border-t border-white/10">
+              <button
+                onClick={() => {
+                  clearMessages()
+                  toast.success('Chat cleared')
+                }}
+                className="sidebar-item w-full text-red-400 hover:text-red-300 hover:bg-red-500/10"
+              >
+                <Trash2 className="w-5 h-5" />
+                <span>Clear Chat</span>
+              </button>
+            </div>
+          </motion.aside>
+        )}
+      </AnimatePresence>
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col h-screen">
+        {/* Header */}
+        <header className="glass-card rounded-none border-x-0 border-t-0 px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+            >
+              {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
+            <div>
+              <h1 className="font-semibold flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-yellow-400" />
+                AI Financial Assistant
+              </h1>
+              <p className="text-sm text-gray-400">Powered by 11 specialized agents</p>
+            </div>
+          </div>
+
+          <Link to="/dashboard" className="btn-secondary text-sm">
+            View Dashboard
+          </Link>
+        </header>
+
+        {/* Messages Area */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {messages.length === 0 ? (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="h-full flex flex-col items-center justify-center text-center"
+            >
+              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center mb-6 animate-float">
+                <Bot className="w-10 h-10 text-white" />
+              </div>
+              <h2 className="text-2xl font-bold mb-2">Welcome to CFOSync AI</h2>
+              <p className="text-gray-400 max-w-md mb-8">
+                I'm your AI financial assistant. Ask me anything about your finances,
+                and I'll coordinate with specialized agents to help you.
+              </p>
+
+              {/* Quick Prompts */}
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-w-2xl">
+                {quickPrompts.map((prompt, index) => (
+                  <button
+                    key={index}
+                    onClick={() => handleQuickPrompt(prompt)}
+                    className="glass-card px-4 py-3 text-sm text-left hover:bg-white/10 transition-colors"
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          ) : (
+            <>
+              {messages.map((message, index) => (
+                <motion.div
+                  key={message.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                  className={cn(
+                    'flex gap-4',
+                    message.role === 'user' ? 'justify-end' : 'justify-start'
+                  )}
+                >
+                  {message.role === 'assistant' && (
+                    <div className={cn(
+                      'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-xl',
+                      message.agent ? `bg-gradient-to-br ${agentColors[message.agent] || 'from-gray-500 to-gray-600'}` : 'bg-gradient-to-br from-primary-500 to-accent-500'
+                    )}>
+                      {message.agent ? agentIcons[message.agent] || '🤖' : '🤖'}
+                    </div>
+                  )}
+
+                  <div className={cn(
+                    'max-w-[70%]',
+                    message.role === 'user' ? 'chat-bubble-user' : 'chat-bubble-ai'
+                  )}>
+                    {message.role === 'assistant' && message.agent && (
+                      <div className="text-xs text-gray-400 mb-2 capitalize">
+                        {message.agent.replace('_', ' ')} Agent
+                      </div>
+                    )}
+                    <div className="whitespace-pre-wrap">{message.content}</div>
+                    <div className="text-xs text-gray-500 mt-2">
+                      {formatDate(new Date(message.timestamp))}
+                    </div>
+                  </div>
+
+                  {message.role === 'user' && (
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center flex-shrink-0">
+                      <User className="w-5 h-5 text-white" />
+                    </div>
+                  )}
+                </motion.div>
+              ))}
+
+              {/* Loading Indicator */}
+              {isLoading && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="flex gap-4"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center animate-pulse">
+                    <Bot className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="chat-bubble-ai">
+                    <div className="typing-indicator">
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              <div ref={messagesEndRef} />
+            </>
+          )}
+        </div>
+
+        {/* Input Area */}
+        <div className="p-6 border-t border-white/10">
+          <div className="max-w-4xl mx-auto">
+            <div className="glass-card p-2 flex items-center gap-2">
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyPress}
+                placeholder="Ask me anything about your finances..."
+                className="flex-1 bg-transparent border-none outline-none resize-none px-4 py-2 text-white placeholder-gray-400 max-h-32"
+                rows={1}
+              />
+              <button
+                onClick={handleSend}
+                disabled={!input.trim() || isLoading}
+                className={cn(
+                  'p-3 rounded-xl transition-all',
+                  input.trim() && !isLoading
+                    ? 'bg-gradient-to-r from-primary-500 to-accent-500 hover:shadow-glow'
+                    : 'bg-white/10 text-gray-500 cursor-not-allowed'
+                )}
+              >
+                <Send className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 text-center mt-2">
+              CFOSync AI can make mistakes. Consider checking important info.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

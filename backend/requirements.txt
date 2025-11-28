@@ -1,0 +1,12 @@
+# Core
+fastapi
+uvicorn[standard]
+python-dotenv
+pydantic>=2.0
+
+# Google ADK & Gemini
+google-adk
+google-generativeai
+
+# HTTP client for external calls
+httpx
