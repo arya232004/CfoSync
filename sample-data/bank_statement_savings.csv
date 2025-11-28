@@ -1,0 +1,8 @@
+Date,Description,Category,Amount,Balance
+2024-01-01,Opening Balance,,,12500.00
+2024-01-05,Credit Card Payment - Chase,Payment,-2500.00,10000.00
+2024-01-10,Transfer from Checking,Transfer,500.00,10500.00
+2024-01-15,Emergency Fund Contribution,Savings,0.00,10500.00
+2024-01-20,Interest Earned,Income,8.75,10508.75
+2024-01-25,Annual Fee Refund,Income,25.00,10533.75
+2024-01-31,Monthly Interest,Income,12.50,10546.25

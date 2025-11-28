@@ -1,0 +1,32 @@
+Date,Description,Category,Amount,Balance
+2024-01-01,Opening Balance,,,5000.00
+2024-01-02,Direct Deposit - TechCorp Inc,Income,4500.00,9500.00
+2024-01-03,Whole Foods Market,Groceries,-125.50,9374.50
+2024-01-04,Shell Gas Station,Transportation,-45.00,9329.50
+2024-01-05,Netflix Subscription,Entertainment,-15.99,9313.51
+2024-01-06,Rent Payment - Apartment 4B,Housing,-1800.00,7513.51
+2024-01-07,Starbucks Coffee,Dining,-8.75,7504.76
+2024-01-08,Amazon Purchase,Shopping,-67.23,7437.53
+2024-01-09,Electric Company Payment,Utilities,-95.00,7342.53
+2024-01-10,Transfer to Savings,Transfer,-500.00,6842.53
+2024-01-11,Uber Ride,Transportation,-23.45,6819.08
+2024-01-12,Chipotle Mexican Grill,Dining,-14.50,6804.58
+2024-01-13,Gym Membership - Planet Fitness,Health,-25.00,6779.58
+2024-01-14,ATM Withdrawal,Cash,-200.00,6579.58
+2024-01-15,Venmo - John Smith,Transfer,75.00,6654.58
+2024-01-16,Direct Deposit - TechCorp Inc,Income,4500.00,11154.58
+2024-01-17,Target Purchase,Shopping,-156.89,10997.69
+2024-01-18,Comcast Internet,Utilities,-89.99,10907.70
+2024-01-19,Trader Joe's,Groceries,-98.45,10809.25
+2024-01-20,Spotify Premium,Entertainment,-10.99,10798.26
+2024-01-21,Car Insurance - Geico,Insurance,-145.00,10653.26
+2024-01-22,CVS Pharmacy,Health,-34.56,10618.70
+2024-01-23,DoorDash Delivery,Dining,-32.50,10586.20
+2024-01-24,Gas & Water Bill,Utilities,-78.00,10508.20
+2024-01-25,Apple App Store,Entertainment,-4.99,10503.21
+2024-01-26,Costco Wholesale,Groceries,-245.67,10257.54
+2024-01-27,Parking Fee Downtown,Transportation,-15.00,10242.54
+2024-01-28,Pet Store - PetSmart,Pets,-56.78,10185.76
+2024-01-29,Phone Bill - Verizon,Utilities,-85.00,10100.76
+2024-01-30,Transfer to Investment Account,Investment,-1000.00,9100.76
+2024-01-31,Interest Payment,Income,2.35,9103.11

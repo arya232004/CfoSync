@@ -159,3 +159,117 @@ export const useUIStore = create<UIState>((set) => ({
   setCurrentAgent: (agent) => set({ currentAgent: agent }),
   setTheme: (theme) => set({ theme }),
 }))
+
+// Uploaded Statements Store
+export interface Transaction {
+  id: string
+  date: string
+  description: string
+  amount: number
+  type: 'income' | 'expense'
+  category: string
+  source: string // which statement it came from
+}
+
+export interface UploadedStatement {
+  id: string
+  name: string
+  size: number
+  type: string
+  status: 'uploading' | 'processing' | 'completed' | 'error'
+  progress: number
+  uploadedAt: string
+  extractedData?: {
+    transactions: number
+    dateRange: string
+    totalIncome: number
+    totalExpenses: number
+    categories: string[]
+  }
+}
+
+interface StatementsState {
+  statements: UploadedStatement[]
+  transactions: Transaction[]
+  isLoading: boolean
+  addStatement: (statement: UploadedStatement) => void
+  updateStatement: (id: string, updates: Partial<UploadedStatement>) => void
+  removeStatement: (id: string) => void
+  addTransactions: (transactions: Transaction[]) => void
+  clearTransactions: () => void
+  getTransactionsByCategory: () => Record<string, Transaction[]>
+  getTotalIncome: () => number
+  getTotalExpenses: () => number
+  getRecentTransactions: (limit?: number) => Transaction[]
+}
+
+export const useStatementsStore = create<StatementsState>()(
+  persist(
+    (set, get) => ({
+      statements: [],
+      transactions: [],
+      isLoading: false,
+      
+      addStatement: (statement) =>
+        set((state) => {
+          // Prevent duplicates
+          if (state.statements.some(s => s.id === statement.id || s.name === statement.name)) {
+            return state
+          }
+          return { statements: [statement, ...state.statements].slice(0, 20) }
+        }),
+      
+      updateStatement: (id, updates) =>
+        set((state) => ({
+          statements: state.statements.map(s => 
+            s.id === id ? { ...s, ...updates } : s
+          )
+        })),
+      
+      removeStatement: (id) =>
+        set((state) => ({
+          statements: state.statements.filter(s => s.id !== id)
+        })),
+      
+      addTransactions: (newTransactions) =>
+        set((state) => {
+          // Prevent duplicates by checking transaction IDs
+          const existingIds = new Set(state.transactions.map(t => t.id))
+          const uniqueNew = newTransactions.filter(t => !existingIds.has(t.id))
+          return { transactions: [...state.transactions, ...uniqueNew] }
+        }),
+      
+      clearTransactions: () => set({ transactions: [] }),
+      
+      getTransactionsByCategory: () => {
+        const transactions = get().transactions
+        return transactions.reduce((acc, t) => {
+          if (!acc[t.category]) acc[t.category] = []
+          acc[t.category].push(t)
+          return acc
+        }, {} as Record<string, Transaction[]>)
+      },
+      
+      getTotalIncome: () => {
+        return get().transactions
+          .filter(t => t.type === 'income')
+          .reduce((sum, t) => sum + t.amount, 0)
+      },
+      
+      getTotalExpenses: () => {
+        return get().transactions
+          .filter(t => t.type === 'expense')
+          .reduce((sum, t) => sum + Math.abs(t.amount), 0)
+      },
+      
+      getRecentTransactions: (limit = 10) => {
+        return get().transactions
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+          .slice(0, limit)
+      }
+    }),
+    {
+      name: 'cfosync-statements',
+    }
+  )
+)

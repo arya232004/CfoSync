@@ -23,15 +23,17 @@ import {
   User,
   Settings,
   Menu,
-  X
+  X,
+  Bot
 } from 'lucide-react'
-import { useProfileStore, useFinancialStore } from '../lib/store'
+import { useProfileStore } from '../lib/store'
 import { formatCurrency, formatPercentage, cn } from '../lib/utils'
 
 const sidebarItems = [
   { icon: Home, label: 'Home', path: '/' },
   { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard', active: true },
   { icon: MessageSquare, label: 'AI Chat', path: '/chat' },
+  { icon: Bot, label: 'Agents', path: '/agents' },
   { icon: User, label: 'Profile', path: '/onboarding' },
   { icon: Settings, label: 'Settings', path: '#' },
 ]

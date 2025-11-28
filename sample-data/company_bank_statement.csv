@@ -1,0 +1,35 @@
+Date,Description,Debit,Credit,Balance,Category
+2024-01-01,Beginning Balance,,,125000.00,
+2024-01-02,Customer Payment - ABC Corp,,15000.00,140000.00,Revenue
+2024-01-02,Customer Payment - XYZ Ltd,,8500.00,148500.00,Revenue
+2024-01-03,Payroll - Week 1,45000.00,,103500.00,Payroll
+2024-01-03,401k Employer Match,2250.00,,101250.00,Benefits
+2024-01-04,AWS Cloud Services,3500.00,,97750.00,Software
+2024-01-05,Google Workspace,850.00,,96900.00,Software
+2024-01-05,Office Rent - January,12000.00,,84900.00,Rent
+2024-01-08,Customer Payment - Tech Solutions,,22000.00,106900.00,Revenue
+2024-01-08,Marketing - Google Ads,5000.00,,101900.00,Marketing
+2024-01-09,Slack Subscription,1200.00,,100700.00,Software
+2024-01-10,Customer Payment - StartupCo,,12500.00,113200.00,Revenue
+2024-01-10,Payroll - Week 2,45000.00,,68200.00,Payroll
+2024-01-10,Health Insurance Premium,8500.00,,59700.00,Benefits
+2024-01-11,Office Supplies - Staples,450.00,,59250.00,Office
+2024-01-12,Customer Payment - MegaCorp,,35000.00,94250.00,Revenue
+2024-01-15,Contractor Payment - John Doe,5000.00,,89250.00,Contractors
+2024-01-15,Customer Payment - GlobalTech,,18000.00,107250.00,Revenue
+2024-01-16,Utility Bills,850.00,,106400.00,Utilities
+2024-01-17,Payroll - Week 3,45000.00,,61400.00,Payroll
+2024-01-17,LinkedIn Premium Business,1500.00,,59900.00,Marketing
+2024-01-18,Customer Payment - InnovateCo,,9500.00,69400.00,Revenue
+2024-01-19,Zoom Enterprise,500.00,,68900.00,Software
+2024-01-22,Customer Payment - FutureTech,,28000.00,96900.00,Revenue
+2024-01-22,Equipment Purchase - Dell,8500.00,,88400.00,Equipment
+2024-01-23,Legal Services - Smith & Associates,3500.00,,84900.00,Professional Services
+2024-01-24,Payroll - Week 4,45000.00,,39900.00,Payroll
+2024-01-24,Accounting Services,2500.00,,37400.00,Professional Services
+2024-01-25,Customer Payment - DataDriven,,42000.00,79400.00,Revenue
+2024-01-26,Insurance Premium - Liability,4500.00,,74900.00,Insurance
+2024-01-29,Customer Payment - CloudFirst,,15500.00,90400.00,Revenue
+2024-01-30,Maintenance & Repairs,1200.00,,89200.00,Maintenance
+2024-01-31,Bank Service Charges,150.00,,89050.00,Fees
+2024-01-31,Interest Earned,,125.00,89175.00,Interest

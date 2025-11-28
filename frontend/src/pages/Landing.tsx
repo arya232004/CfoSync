@@ -102,15 +102,15 @@ export default function Landing() {
 
           <div className="hidden md:flex items-center gap-8">
             <a href="#features" className="nav-link">Features</a>
+            <Link to="/agents" className="nav-link">Agents</Link>
             <a href="#testimonials" className="nav-link">Testimonials</a>
-            <a href="#pricing" className="nav-link">Pricing</a>
           </div>
 
           <div className="flex items-center gap-4">
-            <Link to="/chat" className="btn-secondary hidden sm:flex items-center gap-2">
-              Try Demo
+            <Link to="/login" className="btn-secondary hidden sm:flex items-center gap-2">
+              Sign In
             </Link>
-            <Link to="/onboarding" className="btn-primary flex items-center gap-2">
+            <Link to="/register" className="btn-primary flex items-center gap-2">
               Get Started <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
@@ -143,11 +143,11 @@ export default function Landing() {
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link to="/onboarding" className="btn-primary text-lg px-8 py-4 flex items-center gap-2">
+              <Link to="/register" className="btn-primary text-lg px-8 py-4 flex items-center gap-2">
                 Start Free Trial <ArrowRight className="w-5 h-5" />
               </Link>
               <Link to="/chat" className="btn-secondary text-lg px-8 py-4 flex items-center gap-2">
-                <Brain className="w-5 h-5" /> Try AI Chat Demo
+                <Brain className="w-5 h-5" /> Try AI Demo
               </Link>
             </div>
           </motion.div>

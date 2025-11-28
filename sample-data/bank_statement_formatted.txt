@@ -1,0 +1,92 @@
+================================================================================
+                         FIRST NATIONAL BANK
+                      MONTHLY ACCOUNT STATEMENT
+================================================================================
+
+Account Holder: John A. Smith
+Account Number: ****4521
+Statement Period: January 1, 2024 - January 31, 2024
+Statement Date: February 1, 2024
+
+--------------------------------------------------------------------------------
+                            ACCOUNT SUMMARY
+--------------------------------------------------------------------------------
+
+Opening Balance (01/01/2024):                              $5,000.00
+Total Deposits/Credits:                                    $9,077.35
+Total Withdrawals/Debits:                                 -$4,974.24
+Closing Balance (01/31/2024):                              $9,103.11
+
+--------------------------------------------------------------------------------
+                         TRANSACTION DETAILS
+--------------------------------------------------------------------------------
+
+Date        Description                          Withdrawals    Deposits    Balance
+--------------------------------------------------------------------------------
+01/01/24    OPENING BALANCE                                                 $5,000.00
+01/02/24    DIRECT DEP TECHCORP INC PAYROLL                    $4,500.00   $9,500.00
+01/03/24    WHOLE FOODS MKT #10234 AUSTIN TX      $125.50                  $9,374.50
+01/04/24    SHELL SERVICE STATION                   $45.00                  $9,329.50
+01/05/24    NETFLIX.COM NETFLIX.COM CA              $15.99                  $9,313.51
+01/06/24    ACH DEBIT RENT PMT APT 4B            $1,800.00                  $7,513.51
+01/07/24    STARBUCKS STORE 12345                    $8.75                  $7,504.76
+01/08/24    AMAZON.COM*1A2B3C4D AMZN.COM           $67.23                  $7,437.53
+01/09/24    AUSTIN ENERGY UTIL PMT                  $95.00                  $7,342.53
+01/10/24    ONLINE TRANSFER TO SAV               $500.00                   $6,842.53
+01/11/24    UBER *TRIP HELP.UBER.COM               $23.45                  $6,819.08
+01/12/24    CHIPOTLE 1234 AUSTIN TX                 $14.50                  $6,804.58
+01/13/24    PLANET FITNESS MONTHLY                  $25.00                  $6,779.58
+01/14/24    ATM WITHDRAWAL 1234 MAIN ST           $200.00                   $6,579.58
+01/15/24    VENMO CASHOUT                                        $75.00    $6,654.58
+01/16/24    DIRECT DEP TECHCORP INC PAYROLL                    $4,500.00  $11,154.58
+01/17/24    TARGET 00012345 AUSTIN TX             $156.89                 $10,997.69
+01/18/24    COMCAST CABLE COMM                      $89.99                 $10,907.70
+01/19/24    TRADER JOES #123 AUSTIN TX              $98.45                 $10,809.25
+01/20/24    SPOTIFY USA NEW YORK NY                 $10.99                 $10,798.26
+01/21/24    GEICO AUTO INSURANCE                  $145.00                  $10,653.26
+01/22/24    CVS/PHARMACY #12345                     $34.56                 $10,618.70
+01/23/24    DOORDASH*CHIPOTLE                       $32.50                 $10,586.20
+01/24/24    AUSTIN GAS & WATER                      $78.00                 $10,508.20
+01/25/24    APPLE.COM/BILL                           $4.99                 $10,503.21
+01/26/24    COSTCO WHSE #1234                      $245.67                 $10,257.54
+01/27/24    PARKING AUSTIN DOWNTOWN                 $15.00                 $10,242.54
+01/28/24    PETSMART #1234                          $56.78                 $10,185.76
+01/29/24    VERIZON WIRELESS PMT                    $85.00                 $10,100.76
+01/30/24    TRANSFER TO FIDELITY INVST          $1,000.00                   $9,100.76
+01/31/24    INTEREST PAYMENT                                      $2.35    $9,103.11
+
+--------------------------------------------------------------------------------
+                          SPENDING SUMMARY
+--------------------------------------------------------------------------------
+
+Category                    Amount          % of Total
+--------------------------------------------------------
+Housing                    $1,800.00           36.2%
+Groceries                    $469.62            9.4%
+Dining                        $63.75            1.3%
+Transportation               $128.45            2.6%
+Utilities                    $348.99            7.0%
+Shopping                     $224.12            4.5%
+Entertainment                 $46.96            0.9%
+Health                        $59.56            1.2%
+Insurance                    $145.00            2.9%
+Transfers                  $1,500.00           30.2%
+Other                        $187.79            3.8%
+--------------------------------------------------------
+TOTAL EXPENSES             $4,974.24          100.0%
+
+--------------------------------------------------------------------------------
+                         INCOME SUMMARY  
+--------------------------------------------------------------------------------
+
+Source                      Amount          % of Total
+--------------------------------------------------------
+Payroll                    $9,000.00           99.2%
+Other Income                  $77.35            0.8%
+--------------------------------------------------------
+TOTAL INCOME               $9,077.35          100.0%
+
+================================================================================
+                    Thank you for banking with us!
+        Questions? Call 1-800-555-BANK or visit www.firstnationalbank.com
+================================================================================

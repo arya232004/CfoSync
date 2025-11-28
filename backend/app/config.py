@@ -18,6 +18,12 @@ class Settings:
     HOST: str = os.getenv("HOST", "0.0.0.0")
     PORT: int = int(os.getenv("PORT", "8000"))
     DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
+    
+    # JWT Auth
+    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "cfosync-super-secret-key-change-in-prod")
+    
+    # Firebase
+    FIREBASE_CREDENTIALS: str = os.getenv("FIREBASE_CREDENTIALS", "firebase-credentials.json")
 
 
 settings = Settings()

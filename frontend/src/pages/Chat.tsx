@@ -1,32 +1,18 @@
 import { useState, useRef, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { 
   Send, 
-  Brain, 
   Sparkles, 
-  Menu,
-  X,
-  Home,
-  LayoutDashboard,
-  MessageSquare,
-  Settings,
-  User,
   Trash2,
-  Bot
+  Bot,
+  User
 } from 'lucide-react'
 import { useChatStore } from '../lib/store'
 import { sendChatMessage, Message } from '../lib/api'
 import { cn, formatDate, generateId, agentColors, agentIcons } from '../lib/utils'
+import IndividualLayout from '../components/layouts/IndividualLayout'
 import toast from 'react-hot-toast'
-
-const sidebarItems = [
-  { icon: Home, label: 'Home', path: '/' },
-  { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
-  { icon: MessageSquare, label: 'AI Chat', path: '/chat', active: true },
-  { icon: User, label: 'Profile', path: '/onboarding' },
-  { icon: Settings, label: 'Settings', path: '#' },
-]
 
 const quickPrompts = [
   "Analyze my financial health",
@@ -39,7 +25,6 @@ const quickPrompts = [
 
 export default function Chat() {
   const [input, setInput] = useState('')
-  const [sidebarOpen, setSidebarOpen] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   
   const { messages, sessionId, isLoading, addMessage, setSessionId, setLoading, clearMessages } = useChatStore()
@@ -69,7 +54,7 @@ export default function Chat() {
     try {
       const response = await sendChatMessage(input.trim(), sessionId || undefined)
       
-      if (!sessionId) {
+      if (response.session_id && !sessionId) {
         setSessionId(response.session_id)
       }
 
@@ -77,20 +62,21 @@ export default function Chat() {
         id: generateId(),
         role: 'assistant',
         content: response.response,
-        agent: response.agents_used?.[0] || 'coordinator',
+        agent: response.agent || 'coordinator',
         timestamp: new Date(),
       }
 
       addMessage(assistantMessage)
-    } catch (error) {
+    } catch (error: any) {
       console.error('Chat error:', error)
-      toast.error('Failed to get response. Make sure the backend is running.')
+      const errorMsg = error?.response?.data?.detail || 'Failed to get response. Make sure the backend is running.'
+      toast.error(errorMsg)
       
       // Add error message
       const errorMessage: Message = {
         id: generateId(),
         role: 'assistant',
-        content: 'Sorry, I encountered an error. Please make sure the backend server is running on port 8000.',
+        content: `Sorry, I encountered an error: ${errorMsg}`,
         agent: 'system',
         timestamp: new Date(),
       }
@@ -111,91 +97,43 @@ export default function Chat() {
     setInput(prompt)
   }
 
+  const headerActions = (
+    <div className="flex items-center gap-3">
+      <button
+        onClick={() => {
+          clearMessages()
+          toast.success('Chat cleared')
+        }}
+        className="btn-secondary px-4 py-2 flex items-center gap-2"
+      >
+        <Trash2 className="w-4 h-4" />
+        Clear Chat
+      </button>
+      <Link to="/individual/dashboard" className="btn-secondary px-4 py-2">
+        View Dashboard
+      </Link>
+    </div>
+  )
+
   return (
-    <div className="min-h-screen flex">
-      {/* Sidebar */}
-      <AnimatePresence>
-        {sidebarOpen && (
-          <motion.aside
-            initial={{ x: -280 }}
-            animate={{ x: 0 }}
-            exit={{ x: -280 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="fixed md:relative z-40 w-[280px] h-screen glass-card rounded-none border-y-0 border-l-0 flex flex-col"
-          >
-            {/* Logo */}
-            <div className="p-6 border-b border-white/10">
-              <Link to="/" className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center">
-                  <Brain className="w-6 h-6 text-white" />
-                </div>
-                <span className="text-xl font-bold">CFOSync</span>
-              </Link>
-            </div>
-
-            {/* Navigation */}
-            <nav className="flex-1 p-4 space-y-2">
-              {sidebarItems.map((item, index) => (
-                <Link
-                  key={index}
-                  to={item.path}
-                  className={cn('sidebar-item', item.active && 'active')}
-                >
-                  <item.icon className="w-5 h-5" />
-                  <span>{item.label}</span>
-                </Link>
-              ))}
-            </nav>
-
-            {/* Clear Chat */}
-            <div className="p-4 border-t border-white/10">
-              <button
-                onClick={() => {
-                  clearMessages()
-                  toast.success('Chat cleared')
-                }}
-                className="sidebar-item w-full text-red-400 hover:text-red-300 hover:bg-red-500/10"
-              >
-                <Trash2 className="w-5 h-5" />
-                <span>Clear Chat</span>
-              </button>
-            </div>
-          </motion.aside>
-        )}
-      </AnimatePresence>
-
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col h-screen">
-        {/* Header */}
-        <header className="glass-card rounded-none border-x-0 border-t-0 px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-            >
-              {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </button>
-            <div>
-              <h1 className="font-semibold flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-yellow-400" />
-                AI Financial Assistant
-              </h1>
-              <p className="text-sm text-gray-400">Powered by 11 specialized agents</p>
-            </div>
-          </div>
-
-          <Link to="/dashboard" className="btn-secondary text-sm">
-            View Dashboard
-          </Link>
-        </header>
-
+    <IndividualLayout
+      title={
+        <span className="flex items-center gap-2">
+          <Sparkles className="w-5 h-5 text-yellow-400" />
+          AI Financial Assistant
+        </span>
+      }
+      description="Powered by 11 specialized agents"
+      headerActions={headerActions}
+    >
+      <div className="flex flex-col h-[calc(100vh-180px)]">
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto space-y-6 pb-4">
           {messages.length === 0 ? (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="h-full flex flex-col items-center justify-center text-center"
+              className="h-full flex flex-col items-center justify-center text-center py-12"
             >
               <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center mb-6 animate-float">
                 <Bot className="w-10 h-10 text-white" />
@@ -290,7 +228,7 @@ export default function Chat() {
         </div>
 
         {/* Input Area */}
-        <div className="p-6 border-t border-white/10">
+        <div className="pt-4 border-t border-white/10">
           <div className="max-w-4xl mx-auto">
             <div className="glass-card p-2 flex items-center gap-2">
               <textarea
@@ -320,6 +258,6 @@ export default function Chat() {
           </div>
         </div>
       </div>
-    </div>
+    </IndividualLayout>
   )
 }

@@ -7,6 +7,9 @@ from typing import Any, Optional
 
 from app.config import settings
 from app.agents import get_runner, list_available_agents
+from app.routes.auth import router as auth_router
+from app.routes.agents import router as agents_api_router
+from app.routes.statements import router as statements_router
 
 app = FastAPI(
     title="CFOSync AI Backend",
@@ -22,6 +25,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include routers
+app.include_router(auth_router)
+app.include_router(agents_api_router)  # /api/agents/* routes
+app.include_router(statements_router, prefix="/api")  # /api/statements/* routes
 
 
 # ─────────────────────────────────────────────────────────────

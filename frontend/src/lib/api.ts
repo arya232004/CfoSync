@@ -7,6 +7,16 @@ const api = axios.create({
   },
 })
 
+// Generate or get user ID from localStorage
+function getUserId(): string {
+  let userId = localStorage.getItem('cfosync_user_id')
+  if (!userId) {
+    userId = 'user_' + Math.random().toString(36).substring(2, 15)
+    localStorage.setItem('cfosync_user_id', userId)
+  }
+  return userId
+}
+
 // Types
 export interface Message {
   id: string
@@ -16,55 +26,89 @@ export interface Message {
   timestamp: Date
 }
 
-export interface Agent {
+export interface AgentInfo {
   name: string
   description: string
-  status: string
+}
+
+export interface AgentsListResponse {
+  agents: string[]
+  count: number
+  descriptions: Record<string, string>
 }
 
 export interface AgentResponse {
-  response: string
   agent: string
-  session_id: string
+  response: string
+  session_id: string | null
+  events: any[] | null
+  data: any | null
 }
 
-export interface ChatResponse {
-  response: string
-  agents_used: string[]
-  session_id: string
+export interface HealthResponse {
+  status: string
+  gemini_model: string
+  agents_available: number
 }
 
 // API Functions
-export async function getAgents(): Promise<Agent[]> {
+
+/**
+ * Get list of all available agents
+ */
+export async function getAgents(): Promise<AgentsListResponse> {
   const response = await api.get('/agents')
-  return response.data.agents
+  return response.data
 }
 
+/**
+ * Invoke a specific agent by name
+ */
 export async function invokeAgent(
   agentName: string,
   message: string,
-  sessionId?: string
+  sessionId?: string,
+  context?: Record<string, any>
 ): Promise<AgentResponse> {
   const response = await api.post(`/agents/${agentName}/invoke`, {
+    user_id: getUserId(),
     message,
-    session_id: sessionId,
+    session_id: sessionId || null,
+    context: context || null,
   })
   return response.data
 }
 
+/**
+ * Send a chat message through the coordinator agent
+ */
 export async function sendChatMessage(
   message: string,
-  sessionId?: string
-): Promise<ChatResponse> {
+  sessionId?: string,
+  context?: Record<string, any>
+): Promise<AgentResponse> {
   const response = await api.post('/chat', {
+    user_id: getUserId(),
     message,
-    session_id: sessionId,
+    session_id: sessionId || null,
+    context: context || null,
   })
   return response.data
 }
 
-export async function healthCheck(): Promise<{ status: string }> {
+/**
+ * Health check endpoint
+ */
+export async function healthCheck(): Promise<HealthResponse> {
   const response = await api.get('/health')
+  return response.data
+}
+
+/**
+ * Get root status
+ */
+export async function getStatus(): Promise<{ status: string; message: string }> {
+  const response = await api.get('/')
   return response.data
 }
 
