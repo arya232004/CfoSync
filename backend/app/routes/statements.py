@@ -23,21 +23,22 @@ router = APIRouter(prefix="/statements", tags=["statements"])
 async def get_current_user(authorization: Optional[str] = Header(None)):
     """Dependency to get current authenticated user from JWT token."""
     if not authorization:
-        # Return demo user if no auth (for development)
-        return {"id": "demo-user", "email": "demo@example.com"}
+        raise HTTPException(status_code=401, detail="Not authenticated - please log in")
     
     try:
         scheme, token = authorization.split()
         if scheme.lower() != "bearer":
-            return {"id": "demo-user", "email": "demo@example.com"}
+            raise HTTPException(status_code=401, detail="Invalid authentication scheme")
         
         token_data = decode_token(token)
         if token_data is None:
-            return {"id": "demo-user", "email": "demo@example.com"}
+            raise HTTPException(status_code=401, detail="Invalid or expired token - please log in again")
         
         return {"id": token_data.user_id, "email": token_data.email}
-    except:
-        return {"id": "demo-user", "email": "demo@example.com"}
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Invalid authorization header")
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Authentication failed: {str(e)}")
 
 
 # ─────────────────────────────────────────────────────────────

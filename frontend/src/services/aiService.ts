@@ -3,6 +3,29 @@ import axios from 'axios'
 // @ts-ignore - Vite provides import.meta.env
 const API_URL = import.meta.env?.VITE_API_URL || 'http://localhost:8000/api'
 
+// Helper to get auth headers
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('cfosync-auth')
+  if (token) {
+    try {
+      const parsed = JSON.parse(token)
+      if (parsed.state?.token) {
+        return { Authorization: `Bearer ${parsed.state.token}` }
+      }
+    } catch {
+      // Ignore parse errors
+    }
+  }
+  return {}
+}
+
+// Create authenticated axios instance
+const authAxios = {
+  post: (url: string, data?: unknown) => axios.post(url, data, { headers: getAuthHeaders() }),
+  get: (url: string, config?: unknown) => axios.get(url, { ...config as object, headers: getAuthHeaders() }),
+  delete: (url: string) => axios.delete(url, { headers: getAuthHeaders() }),
+}
+
 // Types for AI responses
 export interface AIInsight {
   type: 'insight' | 'warning' | 'opportunity' | 'alert'
@@ -75,7 +98,7 @@ export const individualAI = {
   // Get personalized financial insights
   async getInsights(userId: string): Promise<AIInsight[]> {
     try {
-      const response = await axios.post(`${API_URL}/agents/insights`, {
+      const response = await authAxios.post(`${API_URL}/agents/insights`, {
         user_id: userId,
         request_type: 'dashboard_insights'
       })
@@ -97,7 +120,7 @@ export const individualAI = {
   // Analyze spending patterns
   async analyzeSpending(userId: string, transactions: unknown[]): Promise<SpendingAnalysis> {
     try {
-      const response = await axios.post(`${API_URL}/agents/spending`, {
+      const response = await authAxios.post(`${API_URL}/agents/spending`, {
         user_id: userId,
         transactions,
         period: 'month'
@@ -123,7 +146,7 @@ export const individualAI = {
   // Get goal recommendations
   async getGoalRecommendations(userId: string, financialProfile: unknown): Promise<GoalRecommendation[]> {
     try {
-      const response = await axios.post(`${API_URL}/agents/goals`, {
+      const response = await authAxios.post(`${API_URL}/agents/goals`, {
         user_id: userId,
         financial_profile: financialProfile
       })
@@ -145,7 +168,7 @@ export const individualAI = {
   // Simulate life event impact
   async simulateLifeEvent(userId: string, event: string, params: Record<string, unknown>): Promise<LifeEventImpact> {
     try {
-      const response = await axios.post(`${API_URL}/agents/simulation`, {
+      const response = await authAxios.post(`${API_URL}/agents/simulation`, {
         user_id: userId,
         event: event,
         params: params
@@ -177,7 +200,7 @@ export const individualAI = {
   // Get investment recommendations
   async getInvestmentAdvice(userId: string, portfolio: unknown): Promise<InvestmentRecommendation[]> {
     try {
-      const response = await axios.post(`${API_URL}/agents/risk`, {
+      const response = await authAxios.post(`${API_URL}/agents/risk`, {
         user_id: userId,
         portfolio,
         request_type: 'recommendations'
@@ -199,7 +222,7 @@ export const individualAI = {
   // Get risk assessment
   async assessRisk(userId: string): Promise<{ score: number; factors: string[]; suggestions: string[] }> {
     try {
-      const response = await axios.post(`${API_URL}/agents/risk`, {
+      const response = await authAxios.post(`${API_URL}/agents/risk`, {
         user_id: userId,
         request_type: 'assessment'
       })
@@ -226,7 +249,7 @@ export const companyAI = {
   // Get CFO-level strategic insights
   async getCFOInsights(companyId: string): Promise<AIInsight[]> {
     try {
-      const response = await axios.post(`${API_URL}/agents/cfo_strategy`, {
+      const response = await authAxios.post(`${API_URL}/agents/cfo_strategy`, {
         company_id: companyId,
         request_type: 'strategic_insights'
       })
@@ -268,7 +291,7 @@ export const companyAI = {
   // Forecast cash flow
   async forecastCashFlow(companyId: string, months: number = 3): Promise<CashFlowForecast[]> {
     try {
-      const response = await axios.post(`${API_URL}/agents/cashflow`, {
+      const response = await authAxios.post(`${API_URL}/agents/cashflow`, {
         company_id: companyId,
         forecast_months: months
       })
@@ -309,7 +332,7 @@ export const companyAI = {
   // Detect fraud and anomalies
   async detectAnomalies(companyId: string, transactions: unknown[]): Promise<FraudAlert[]> {
     try {
-      const response = await axios.post(`${API_URL}/agents/compliance`, {
+      const response = await authAxios.post(`${API_URL}/agents/compliance`, {
         company_id: companyId,
         transactions,
         check_type: 'fraud_detection'
@@ -354,7 +377,7 @@ export const companyAI = {
     recommendations: string[]
   }> {
     try {
-      const response = await axios.post(`${API_URL}/agents/budgets`, {
+      const response = await authAxios.post(`${API_URL}/agents/budgets`, {
         company_id: companyId,
         request_type: 'budget_analysis'
       })
@@ -382,7 +405,7 @@ export const companyAI = {
     benchmarks: { metric: string; company: number; industry: number; status: 'good' | 'warning' | 'critical' }[]
   }> {
     try {
-      const response = await axios.post(`${API_URL}/agents/payroll`, {
+      const response = await authAxios.post(`${API_URL}/agents/payroll`, {
         company_id: companyId,
         request_type: 'payroll_analysis'
       })
@@ -416,7 +439,7 @@ export const companyAI = {
   // Smart notifications/nudges
   async getSmartNudges(companyId: string): Promise<AIInsight[]> {
     try {
-      const response = await axios.post(`${API_URL}/agents/nudge`, {
+      const response = await authAxios.post(`${API_URL}/agents/nudge`, {
         company_id: companyId
       })
       return response.data.nudges
@@ -464,7 +487,7 @@ export const sharedAI = {
       formData.append('file', file)
       formData.append('user_id', userId)
       
-      const response = await axios.post(`${API_URL}/agents/document`, formData, {
+      const response = await authAxios.post(`${API_URL}/agents/document`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       })
       return response.data
@@ -501,7 +524,7 @@ export const sharedAI = {
     { description: string; amount: number; category: string; confidence: number }[]
   > {
     try {
-      const response = await axios.post(`${API_URL}/agents/profile`, {
+      const response = await authAxios.post(`${API_URL}/agents/profile`, {
         transactions,
         request_type: 'categorize'
       })
@@ -593,7 +616,7 @@ export const pageDataService = {
   // Get dashboard data
   async getDashboardData(userId: string): Promise<DashboardData> {
     try {
-      const response = await axios.post(`${API_URL}/agents/dashboard`, { user_id: userId })
+      const response = await authAxios.post(`${API_URL}/agents/dashboard`, { user_id: userId })
       return response.data
     } catch (error) {
       console.error('Error fetching dashboard data:', error)
@@ -604,7 +627,7 @@ export const pageDataService = {
   // Get investments data
   async getInvestmentsData(userId: string, timeframe: string = '1Y'): Promise<InvestmentsData> {
     try {
-      const response = await axios.post(`${API_URL}/agents/investments`, { user_id: userId, timeframe })
+      const response = await authAxios.post(`${API_URL}/agents/investments`, { user_id: userId, timeframe })
       return response.data
     } catch (error) {
       console.error('Error fetching investments data:', error)
@@ -615,7 +638,7 @@ export const pageDataService = {
   // Get planning data
   async getPlanningData(userId: string): Promise<PlanningData> {
     try {
-      const response = await axios.post(`${API_URL}/agents/planning`, { user_id: userId })
+      const response = await authAxios.post(`${API_URL}/agents/planning`, { user_id: userId })
       return response.data
     } catch (error) {
       console.error('Error fetching planning data:', error)
@@ -626,7 +649,7 @@ export const pageDataService = {
   // Get simulator config
   async getSimulatorConfig(userId: string): Promise<SimulatorConfig> {
     try {
-      const response = await axios.post(`${API_URL}/agents/simulator/config`, { user_id: userId })
+      const response = await authAxios.post(`${API_URL}/agents/simulator/config`, { user_id: userId })
       return response.data
     } catch (error) {
       console.error('Error fetching simulator config:', error)
@@ -645,7 +668,7 @@ export const pageDataService = {
     selectedEvents: { eventId: string; year: number; cost: number; name?: string }[]
   ): Promise<SimulationResponse> {
     try {
-      const response = await axios.post(`${API_URL}/agents/simulator/run`, {
+      const response = await authAxios.post(`${API_URL}/agents/simulator/run`, {
         user_id: userId,
         current_age: currentAge,
         retirement_age: retirementAge,
@@ -706,7 +729,7 @@ export const statementsAPI = {
   // Upload a statement with its transactions
   async uploadStatement(statement: StatementData): Promise<{ success: boolean; statement_id: string; transactions_saved: number }> {
     try {
-      const response = await axios.post(`${API_URL}/statements/upload`, statement)
+      const response = await authAxios.post(`${API_URL}/statements/upload`, statement)
       return response.data
     } catch (error) {
       console.error('Error uploading statement:', error)
@@ -717,7 +740,7 @@ export const statementsAPI = {
   // Get all statements for the user
   async getStatements(): Promise<{ statements: any[]; count: number }> {
     try {
-      const response = await axios.get(`${API_URL}/statements/list`)
+      const response = await authAxios.get(`${API_URL}/statements/list`)
       return response.data
     } catch (error) {
       console.error('Error fetching statements:', error)
@@ -728,7 +751,7 @@ export const statementsAPI = {
   // Get all transactions for the user
   async getTransactions(limit = 100): Promise<{ transactions: StatementTransaction[]; count: number; summary: any }> {
     try {
-      const response = await axios.get(`${API_URL}/statements/transactions`, { params: { limit } })
+      const response = await authAxios.get(`${API_URL}/statements/transactions`, { params: { limit } })
       return response.data
     } catch (error) {
       console.error('Error fetching transactions:', error)
@@ -739,7 +762,7 @@ export const statementsAPI = {
   // Get financial summary
   async getFinancialSummary(): Promise<FinancialSummary> {
     try {
-      const response = await axios.get(`${API_URL}/statements/summary`)
+      const response = await authAxios.get(`${API_URL}/statements/summary`)
       return response.data
     } catch (error) {
       console.error('Error fetching financial summary:', error)
@@ -760,7 +783,7 @@ export const statementsAPI = {
   // Delete a statement
   async deleteStatement(statementId: string): Promise<{ success: boolean }> {
     try {
-      const response = await axios.delete(`${API_URL}/statements/${statementId}`)
+      const response = await authAxios.delete(`${API_URL}/statements/${statementId}`)
       return response.data
     } catch (error) {
       console.error('Error deleting statement:', error)

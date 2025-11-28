@@ -1,13 +1,38 @@
 """Agent API routes for CFOSync frontend integration."""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends, Header
 from pydantic import BaseModel
 from typing import Any, Optional, List
 from datetime import datetime
 
+from ..auth import decode_token
 from ..firebase import get_user_documents, get_user_transactions
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
+
+
+# ─────────────────────────────────────────────────────────────
+# Dependencies
+# ─────────────────────────────────────────────────────────────
+async def get_current_user(authorization: Optional[str] = Header(None)):
+    """Dependency to get current authenticated user from JWT token."""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Not authenticated - please log in")
+    
+    try:
+        scheme, token = authorization.split()
+        if scheme.lower() != "bearer":
+            raise HTTPException(status_code=401, detail="Invalid authentication scheme")
+        
+        token_data = decode_token(token)
+        if token_data is None:
+            raise HTTPException(status_code=401, detail="Invalid or expired token - please log in again")
+        
+        return {"id": token_data.user_id, "email": token_data.email}
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Invalid authorization header")
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Authentication failed: {str(e)}")
 
 
 # Helper function to get user's real financial data from Firebase
@@ -331,9 +356,10 @@ MOCK_FRAUD_ALERTS = [
 # ─────────────────────────────────────────────────────────────
 
 @router.post("/insights")
-async def get_insights(request: InsightsRequest):
+async def get_insights(request: InsightsRequest, current_user: dict = Depends(get_current_user)):
     """Get AI-powered financial insights based on real user data."""
-    data = await get_user_financial_data(request.user_id)
+    user_id = current_user["id"]
+    data = await get_user_financial_data(user_id)
     
     if not data["has_data"]:
         return {
@@ -346,7 +372,7 @@ async def get_insights(request: InsightsRequest):
                     "action": "Upload now"
                 }
             ],
-            "user_id": request.user_id
+            "user_id": user_id
         }
     
     insights = []
@@ -401,13 +427,14 @@ async def get_insights(request: InsightsRequest):
             "action": "Learn more"
         })
     
-    return {"insights": insights, "user_id": request.user_id}
+    return {"insights": insights, "user_id": user_id}
 
 
 @router.post("/risk")
-async def assess_risk(request: RiskRequest):
+async def assess_risk(request: RiskRequest, current_user: dict = Depends(get_current_user)):
     """Assess financial risk based on real user data."""
-    data = await get_user_financial_data(request.user_id)
+    user_id = current_user["id"]
+    data = await get_user_financial_data(user_id)
     
     if not data["has_data"]:
         return {
@@ -415,7 +442,7 @@ async def assess_risk(request: RiskRequest):
             "level": "unknown",
             "factors": ["No financial data available"],
             "suggestions": ["Upload bank statements to get your risk assessment"],
-            "user_id": request.user_id
+            "user_id": user_id
         }
     
     risk_score = 70  # Base score
@@ -455,14 +482,15 @@ async def assess_risk(request: RiskRequest):
         "level": level,
         "factors": factors if factors else ["Your finances appear stable based on available data"],
         "suggestions": suggestions if suggestions else ["Continue maintaining good financial habits"],
-        "user_id": request.user_id
+        "user_id": user_id
     }
 
 
 @router.post("/spending")
-async def analyze_spending(request: SpendingRequest):
+async def analyze_spending(request: SpendingRequest, current_user: dict = Depends(get_current_user)):
     """Analyze spending patterns from real user data."""
-    data = await get_user_financial_data(request.user_id)
+    user_id = current_user["id"]
+    data = await get_user_financial_data(user_id)
     
     if not data["has_data"]:
         return {
@@ -470,7 +498,7 @@ async def analyze_spending(request: SpendingRequest):
             "topCategories": [],
             "insights": [{"type": "info", "title": "No Data", "message": "Upload statements to see spending analysis", "priority": "high"}],
             "savingsOpportunities": [],
-            "user_id": request.user_id
+            "user_id": user_id
         }
     
     # Color palette for categories
@@ -512,14 +540,15 @@ async def analyze_spending(request: SpendingRequest):
         "topCategories": top_categories,
         "insights": insights,
         "savingsOpportunities": opportunities,
-        "user_id": request.user_id
+        "user_id": user_id
     }
 
 
 @router.post("/profile")
-async def get_profile(request: ProfileRequest):
+async def get_profile(request: ProfileRequest, current_user: dict = Depends(get_current_user)):
     """Get financial profile from real data."""
-    data = await get_user_financial_data(request.user_id)
+    user_id = current_user["id"]
+    data = await get_user_financial_data(user_id)
     
     return {
         "profile": {
@@ -531,14 +560,15 @@ async def get_profile(request: ProfileRequest):
             "statementsCount": data["statements_count"],
             "hasData": data["has_data"]
         },
-        "user_id": request.user_id
+        "user_id": user_id
     }
 
 
 @router.post("/goals")
-async def get_goal_recommendations(request: GoalsRequest):
+async def get_goal_recommendations(request: GoalsRequest, current_user: dict = Depends(get_current_user)):
     """Get AI-recommended financial goals based on real data."""
-    data = await get_user_financial_data(request.user_id)
+    user_id = current_user["id"]
+    data = await get_user_financial_data(user_id)
     
     if not data["has_data"]:
         return {
@@ -552,7 +582,7 @@ async def get_goal_recommendations(request: GoalsRequest):
                     "reasoning": "Upload your bank statements to get personalized goal recommendations"
                 }
             ],
-            "user_id": request.user_id
+            "user_id": user_id
         }
     
     goals = []
@@ -592,13 +622,14 @@ async def get_goal_recommendations(request: GoalsRequest):
             "reasoning": f"Cut expenses by ${abs(data['net_savings']):,.0f} to stop accumulating debt"
         })
     
-    return {"goals": goals, "user_id": request.user_id}
+    return {"goals": goals, "user_id": user_id}
 
 
 @router.post("/simulation")
-async def run_simulation(request: SimulationRequest):
+async def run_simulation(request: SimulationRequest, current_user: dict = Depends(get_current_user)):
     """Run life event simulation based on real financial data."""
-    data = await get_user_financial_data(request.user_id)
+    user_id = current_user["id"]
+    data = await get_user_financial_data(user_id)
     
     # Use real data if available, otherwise use defaults
     base_income = data["total_income"] if data["has_data"] else 5000
@@ -725,9 +756,10 @@ class DashboardRequest(BaseModel):
 
 
 @router.post("/dashboard")
-async def get_dashboard_data(request: DashboardRequest):
+async def get_dashboard_data(request: DashboardRequest, current_user: dict = Depends(get_current_user)):
     """Get comprehensive dashboard data from real user data."""
-    data = await get_user_financial_data(request.user_id)
+    user_id = current_user["id"]
+    data = await get_user_financial_data(user_id)
     
     # Color palette
     colors = ["#3B82F6", "#10B981", "#8B5CF6", "#F59E0B", "#EC4899", "#06B6D4", "#6B7280"]
@@ -772,7 +804,7 @@ async def get_dashboard_data(request: DashboardRequest):
             health_score += 10  # More data = better analysis
     
     return {
-        "user_id": request.user_id,
+        "user_id": user_id,
         "hasData": data["has_data"],
         "financialHealth": {
             "score": min(100, health_score),
@@ -821,10 +853,11 @@ class InvestmentsRequest(BaseModel):
 
 
 @router.post("/investments")
-async def get_investments_data(request: InvestmentsRequest):
+async def get_investments_data(request: InvestmentsRequest, current_user: dict = Depends(get_current_user)):
     """Get comprehensive investment portfolio data."""
+    user_id = current_user["id"]
     return {
-        "user_id": request.user_id,
+        "user_id": user_id,
         "portfolioSummary": {
             "totalValue": 125000,
             "totalGain": 18500,
@@ -887,9 +920,10 @@ class PlanningRequest(BaseModel):
 
 
 @router.post("/planning")
-async def get_planning_data(request: PlanningRequest):
+async def get_planning_data(request: PlanningRequest, current_user: dict = Depends(get_current_user)):
     """Get financial planning and goals data from real user data."""
-    data = await get_user_financial_data(request.user_id)
+    user_id = current_user["id"]
+    data = await get_user_financial_data(user_id)
     
     monthly_income = data["total_income"]
     monthly_expenses = data["total_expenses"]
@@ -977,7 +1011,7 @@ async def get_planning_data(request: PlanningRequest):
         })
     
     return {
-        "user_id": request.user_id,
+        "user_id": user_id,
         "summary": {
             "monthlyIncome": monthly_income,
             "monthlyExpenses": monthly_expenses,
@@ -1010,9 +1044,10 @@ class RunSimulationRequest(BaseModel):
 
 
 @router.post("/simulator/config")
-async def get_simulator_config(request: SimulatorConfigRequest):
+async def get_simulator_config(request: SimulatorConfigRequest, current_user: dict = Depends(get_current_user)):
     """Get life simulator configuration with defaults from real user data."""
-    data = await get_user_financial_data(request.user_id)
+    user_id = current_user["id"]
+    data = await get_user_financial_data(user_id)
     
     # Use real data for defaults if available
     defaults = {
@@ -1024,7 +1059,7 @@ async def get_simulator_config(request: SimulatorConfigRequest):
     }
     
     return {
-        "user_id": request.user_id,
+        "user_id": user_id,
         "defaults": defaults,
         "lifeEvents": [
             {
@@ -1096,8 +1131,9 @@ async def get_simulator_config(request: SimulatorConfigRequest):
 
 
 @router.post("/simulator/run")
-async def run_life_simulation(request: RunSimulationRequest):
+async def run_life_simulation(request: RunSimulationRequest, current_user: dict = Depends(get_current_user)):
     """Run life event simulation and get results."""
+    user_id = current_user["id"]
     results = []
     net_worth = request.current_savings
     income = request.current_income
@@ -1139,7 +1175,7 @@ async def run_life_simulation(request: RunSimulationRequest):
     all_positive = all(r['status'] != 'negative' for r in results)
     
     return {
-        "user_id": request.user_id,
+        "user_id": user_id,
         "results": results,
         "summary": {
             "retirementNetWorth": retirement_result['netWorth'],
