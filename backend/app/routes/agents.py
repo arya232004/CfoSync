@@ -633,36 +633,43 @@ def parse_amount(value: str) -> float:
 def detect_csv_type(headers: List[str], sample_rows: List[dict]) -> str:
     """Detect the type of financial CSV based on headers and content."""
     headers_lower = [h.lower().strip() for h in headers]
+    headers_joined = ' '.join(headers_lower)
     
-    # P&L detection
-    pl_keywords = ['revenue', 'sales', 'cost of goods', 'gross profit', 'operating', 'net income', 'ebitda']
-    if any(kw in ' '.join(headers_lower) for kw in pl_keywords):
+    # Also check content of first column (common for financial statements)
+    first_col_content = ''
+    if sample_rows and headers:
+        first_col = headers[0]
+        first_col_content = ' '.join([str(row.get(first_col, '')).lower() for row in sample_rows[:10]])
+    
+    # P&L detection - check headers and content
+    pl_keywords = ['revenue', 'sales', 'cost of goods', 'gross profit', 'operating', 'net income', 'ebitda', 'cogs']
+    if any(kw in headers_joined for kw in pl_keywords) or any(kw in first_col_content for kw in pl_keywords):
         return 'profit_loss'
     
     # Balance Sheet detection
-    bs_keywords = ['assets', 'liabilities', 'equity', 'current assets', 'fixed assets', 'retained']
-    if any(kw in ' '.join(headers_lower) for kw in bs_keywords):
+    bs_keywords = ['assets', 'liabilities', 'equity', 'current assets', 'fixed assets', 'retained', 'balance sheet']
+    if any(kw in headers_joined for kw in bs_keywords) or any(kw in first_col_content for kw in bs_keywords):
         return 'balance_sheet'
     
     # Cash Flow Statement detection
     cf_keywords = ['operating activities', 'investing activities', 'financing activities', 'cash flow']
-    if any(kw in ' '.join(headers_lower) for kw in cf_keywords):
+    if any(kw in headers_joined for kw in cf_keywords) or any(kw in first_col_content for kw in cf_keywords):
         return 'cash_flow_statement'
-    
-    # Bank Statement detection (transaction-based)
-    tx_keywords = ['date', 'description', 'amount', 'debit', 'credit', 'balance', 'transaction']
-    if sum(1 for kw in tx_keywords if any(kw in h for h in headers_lower)) >= 2:
-        return 'bank_statement'
     
     # Employee/Payroll detection
     emp_keywords = ['employee', 'salary', 'department', 'role', 'position', 'hire']
-    if any(kw in ' '.join(headers_lower) for kw in emp_keywords):
+    if any(kw in headers_joined for kw in emp_keywords):
         return 'employee_data'
     
     # Budget detection
-    budget_keywords = ['budget', 'allocated', 'department', 'forecast']
-    if any(kw in ' '.join(headers_lower) for kw in budget_keywords):
+    budget_keywords = ['budget', 'allocated', 'forecast']
+    if any(kw in headers_joined for kw in budget_keywords):
         return 'budget_data'
+    
+    # Bank Statement detection (transaction-based) - check last
+    tx_keywords = ['date', 'description', 'amount', 'debit', 'credit', 'balance', 'transaction']
+    if sum(1 for kw in tx_keywords if any(kw in h for h in headers_lower)) >= 2:
+        return 'bank_statement'
     
     return 'unknown'
 
@@ -678,46 +685,58 @@ def parse_profit_loss_csv(rows: List[dict], headers: List[str]) -> dict:
         'line_items': []
     }
     
-    for row in rows:
-        # Try to find the item/category column
-        item_col = None
-        amount_col = None
-        
-        for col in headers:
-            col_lower = col.lower()
-            if any(kw in col_lower for kw in ['item', 'category', 'description', 'account', 'line']):
-                item_col = col
-            elif any(kw in col_lower for kw in ['amount', 'value', 'total', 'ytd', '2024', '2025']):
-                amount_col = col
-        
-        if not item_col:
-            item_col = headers[0] if headers else None
-        if not amount_col:
-            amount_col = headers[-1] if len(headers) > 1 else None
-        
-        if item_col and amount_col:
-            item_name = str(row.get(item_col, '')).lower()
-            amount = parse_amount(str(row.get(amount_col, '0')))
-            
-            # Categorize line items
-            if any(kw in item_name for kw in ['revenue', 'sales', 'income']):
-                if 'net' not in item_name and 'gross' not in item_name:
-                    result['revenue'] += abs(amount)
-            elif any(kw in item_name for kw in ['cost of goods', 'cogs', 'cost of sales']):
-                result['cost_of_goods_sold'] += abs(amount)
-            elif 'gross profit' in item_name:
-                result['gross_profit'] = amount
-            elif any(kw in item_name for kw in ['operating expense', 'opex', 'sg&a', 'selling', 'admin']):
-                result['operating_expenses'] += abs(amount)
-            elif 'net income' in item_name or 'net profit' in item_name:
-                result['net_income'] = amount
-            
-            result['line_items'].append({
-                'item': row.get(item_col, ''),
-                'amount': amount
-            })
+    # Find the item/description column and amount column
+    item_col = headers[0] if headers else None
     
-    # Calculate if not found
+    # Find amount column - prioritize YTD or Total columns for better totals
+    amount_col = None
+    for col in headers:
+        col_lower = col.lower()
+        if any(kw in col_lower for kw in ['ytd', 'total', 'annual', 'year']):
+            amount_col = col
+            break
+    
+    # Fall back to last column if no YTD/Total column found
+    if not amount_col and len(headers) > 1:
+        amount_col = headers[-1]
+    
+    for row in rows:
+        if not item_col or not amount_col:
+            continue
+            
+        item_name = str(row.get(item_col, '')).lower()
+        amount = parse_amount(str(row.get(amount_col, '0')))
+        
+        # Skip empty rows
+        if not item_name.strip():
+            continue
+        
+        # Categorize line items
+        if any(kw in item_name for kw in ['total revenue', 'total sales']):
+            result['revenue'] = abs(amount)
+        elif any(kw in item_name for kw in ['revenue', 'sales', 'income']) and 'net' not in item_name and 'gross' not in item_name and 'operating' not in item_name:
+            # Individual revenue line items (accumulate)
+            if 'total' not in item_name:
+                result['revenue'] += abs(amount)
+        elif any(kw in item_name for kw in ['cost of goods', 'cogs', 'cost of sales']):
+            result['cost_of_goods_sold'] += abs(amount)
+        elif 'gross profit' in item_name:
+            result['gross_profit'] = amount
+        elif any(kw in item_name for kw in ['total operating expense', 'total expense']):
+            result['operating_expenses'] = abs(amount)
+        elif 'operating expense' in item_name or 'opex' in item_name:
+            # Individual expense line items (accumulate if no total found)
+            result['operating_expenses'] += abs(amount)
+        elif 'net income' in item_name or 'net profit' in item_name or 'bottom line' in item_name:
+            if 'before' not in item_name:  # Skip "Net Income Before Tax"
+                result['net_income'] = amount
+        
+        result['line_items'].append({
+            'item': row.get(item_col, ''),
+            'amount': amount
+        })
+    
+    # Calculate if not found - use accumulated values
     if result['gross_profit'] == 0 and result['revenue'] > 0:
         result['gross_profit'] = result['revenue'] - result['cost_of_goods_sold']
     if result['net_income'] == 0 and result['gross_profit'] > 0:
@@ -1016,14 +1035,31 @@ async def save_company(
     user_id = current_user["id"]
     
     try:
+        # Get existing company data to merge financials
+        existing_data = await get_company_data(user_id) or {}
+        existing_financials = existing_data.get("financials", {})
+        
         # Save main company data
         company_data = {}
         if request.company_name:
             company_data["company_name"] = request.company_name
         if request.industry:
             company_data["industry"] = request.industry
+        
+        # Merge financials - only update fields that have non-zero values
+        # This prevents form defaults from overwriting CSV-parsed data
         if request.financials:
-            company_data["financials"] = request.financials.dict()
+            new_financials = request.financials.dict()
+            merged_financials = existing_financials.copy()
+            
+            for key, value in new_financials.items():
+                # Only update if new value is non-zero AND existing is zero/missing
+                # OR if there's no existing data at all
+                if value and value > 0:
+                    if key not in merged_financials or merged_financials.get(key, 0) == 0:
+                        merged_financials[key] = value
+            
+            company_data["financials"] = merged_financials
         
         if company_data:
             await save_company_data(user_id, company_data)

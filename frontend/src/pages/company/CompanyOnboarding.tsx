@@ -140,35 +140,13 @@ export default function CompanyOnboarding() {
   const handleSubmit = async () => {
     setIsSubmitting(true)
     try {
-      // First, upload and parse all CSV files
-      const csvFiles = data.documents.filter(f => f.name.endsWith('.csv'))
-      
-      for (const file of csvFiles) {
-        const formData = new FormData()
-        formData.append('file', file)
-        formData.append('document_type', 'auto')
-        
-        try {
-          const uploadResponse = await api.post('/api/agents/company/upload-csv', formData, {
-            headers: { 'Content-Type': 'multipart/form-data' }
-          })
-          console.log(`Uploaded ${file.name}:`, uploadResponse.data)
-          setUploadedResults(prev => [...prev, {
-            filename: file.name,
-            type: uploadResponse.data.document_type,
-            success: true
-          }])
-        } catch (uploadError) {
-          console.error(`Failed to upload ${file.name}:`, uploadError)
-          setUploadedResults(prev => [...prev, {
-            filename: file.name,
-            type: 'error',
-            success: false
-          }])
-        }
-      }
+      // CSVs are already uploaded immediately when selected via handleFileUpload
+      // Check if we have financial data from CSVs
+      const hasCsvFinancials = uploadedResults.some(r => 
+        r.success && (r.type === 'profit_loss' || r.type === 'balance_sheet' || r.type === 'bank_statement')
+      )
 
-      // Parse financial values from form (as fallback/supplement)
+      // Parse financial values from form (only as fallback if no CSV data)
       const parseRevenue = (range: string) => {
         const map: Record<string, number> = {
           'pre-revenue': 0,
@@ -187,11 +165,16 @@ export default function CompanyOnboarding() {
         return isNaN(num) ? 0 : num
       }
 
-      // Save company info (will merge with CSV-parsed data on backend)
-      const companyData = {
+      // Save company info (backend will merge with CSV-parsed data)
+      const companyData: any = {
         company_name: data.companyName,
         industry: data.industry,
-        financials: {
+      }
+      
+      // Only include form financials if no CSV financials were parsed
+      // This prevents overwriting actual CSV data with form estimates
+      if (!hasCsvFinancials) {
+        companyData.financials = {
           revenue: parseRevenue(data.annualRevenue),
           expenses: parseNumber(data.monthlyBurnRate) * 12,
           cash_balance: parseNumber(data.cashOnHand),
