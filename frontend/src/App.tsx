@@ -1,6 +1,8 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import { useAuthStore } from './lib/auth'
+import { useEffect } from 'react'
+import { initializeTheme, useSettingsStore } from './lib/store'
 
 // Public pages
 import Landing from './pages/Landing'
@@ -25,6 +27,7 @@ import AIAgents from './pages/individual/AIAgents'
 import UploadStatements from './pages/individual/UploadStatements'
 import Profile from './pages/individual/Profile'
 import Settings from './pages/individual/Settings'
+import Transactions from './pages/individual/Transactions'
 
 // Company Portal
 import CompanyDashboard from './pages/company/CompanyDashboard'
@@ -39,6 +42,17 @@ import ProtectedRoute from './components/ProtectedRoute'
 
 function App() {
   const { isAuthenticated, user } = useAuthStore()
+  const { theme } = useSettingsStore()
+  
+  // Initialize theme on app load
+  useEffect(() => {
+    initializeTheme()
+  }, [])
+  
+  // Also apply theme when it changes in settings
+  useEffect(() => {
+    // Theme is applied by the store's setTheme function
+  }, [theme])
 
   // Helper to redirect to correct portal
   const getPortalRedirect = () => {
@@ -114,6 +128,11 @@ function App() {
         <Route path="/individual/settings" element={
           <ProtectedRoute allowedUserTypes={['individual']}>
             <Settings />
+          </ProtectedRoute>
+        } />
+        <Route path="/individual/transactions" element={
+          <ProtectedRoute allowedUserTypes={['individual']}>
+            <Transactions />
           </ProtectedRoute>
         } />
         <Route path="/individual/*" element={

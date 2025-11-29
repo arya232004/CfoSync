@@ -197,6 +197,8 @@ interface StatementsState {
   removeStatement: (id: string) => void
   addTransactions: (transactions: Transaction[]) => void
   clearTransactions: () => void
+  clearStatements: () => void
+  clearAll: () => void
   getTransactionsByCategory: () => Record<string, Transaction[]>
   getTotalIncome: () => number
   getTotalExpenses: () => number
@@ -241,6 +243,10 @@ export const useStatementsStore = create<StatementsState>()(
       
       clearTransactions: () => set({ transactions: [] }),
       
+      clearStatements: () => set({ statements: [] }),
+      
+      clearAll: () => set({ transactions: [], statements: [] }),
+      
       getTransactionsByCategory: () => {
         const transactions = get().transactions
         return transactions.reduce((acc, t) => {
@@ -273,3 +279,147 @@ export const useStatementsStore = create<StatementsState>()(
     }
   )
 )
+
+
+// Settings Store - Theme, Currency, Notifications
+interface NotificationSettings {
+  monthlyStatementReminder: boolean
+  weeklyInvestmentReports: boolean
+  goalReminders: boolean
+  budgetAlerts: boolean
+}
+
+// Exchange rates relative to USD (base currency)
+// These are approximate rates - in production, you'd fetch these from an API
+const EXCHANGE_RATES: Record<string, number> = {
+  'USD': 1,
+  'EUR': 0.92,
+  'GBP': 0.79,
+  'INR': 83.50
+}
+
+interface SettingsState {
+  theme: 'dark' | 'light'
+  currency: 'USD' | 'EUR' | 'GBP' | 'INR'
+  exchangeRates: Record<string, number>
+  notifications: NotificationSettings
+  
+  setTheme: (theme: 'dark' | 'light') => void
+  setCurrency: (currency: 'USD' | 'EUR' | 'GBP' | 'INR') => void
+  updateNotifications: (updates: Partial<NotificationSettings>) => void
+  convertFromUSD: (amountInUSD: number) => number
+  getExchangeRate: () => number
+}
+
+export const useSettingsStore = create<SettingsState>()(
+  persist(
+    (set, get) => ({
+      theme: 'dark',
+      currency: 'USD',
+      exchangeRates: EXCHANGE_RATES,
+      notifications: {
+        monthlyStatementReminder: true,
+        weeklyInvestmentReports: true,
+        goalReminders: true,
+        budgetAlerts: true,
+      },
+      
+      setTheme: (theme) => {
+        set({ theme })
+        applyTheme(theme)
+      },
+      
+      setCurrency: (currency) => set({ currency }),
+      
+      updateNotifications: (updates) =>
+        set((state) => ({
+          notifications: { ...state.notifications, ...updates }
+        })),
+      
+      // Convert amount from USD to selected currency
+      convertFromUSD: (amountInUSD: number) => {
+        const { currency, exchangeRates } = get()
+        const rate = exchangeRates[currency] || 1
+        return amountInUSD * rate
+      },
+      
+      // Get current exchange rate
+      getExchangeRate: () => {
+        const { currency, exchangeRates } = get()
+        return exchangeRates[currency] || 1
+      }
+    }),
+    {
+      name: 'cfosync-settings',
+    }
+  )
+)
+
+// Apply theme to document - exported for use in App.tsx
+export const applyTheme = (theme: 'dark' | 'light') => {
+  const root = document.documentElement
+  
+  if (theme === 'dark') {
+    root.classList.add('dark')
+    root.classList.remove('light')
+    root.style.colorScheme = 'dark'
+    // Dark theme colors
+    root.style.setProperty('--bg-primary', '#0f0f1a')
+    root.style.setProperty('--bg-secondary', '#1a1a2e')
+    root.style.setProperty('--bg-card', 'rgba(255, 255, 255, 0.05)')
+    root.style.setProperty('--text-primary', '#ffffff')
+    root.style.setProperty('--text-secondary', '#a0a0a0')
+    root.style.setProperty('--border-color', 'rgba(255, 255, 255, 0.1)')
+  } else {
+    root.classList.add('light')
+    root.classList.remove('dark')
+    root.style.colorScheme = 'light'
+    // Light theme colors
+    root.style.setProperty('--bg-primary', '#f8fafc')
+    root.style.setProperty('--bg-secondary', '#ffffff')
+    root.style.setProperty('--bg-card', 'rgba(0, 0, 0, 0.02)')
+    root.style.setProperty('--text-primary', '#1a1a2e')
+    root.style.setProperty('--text-secondary', '#64748b')
+    root.style.setProperty('--border-color', 'rgba(0, 0, 0, 0.1)')
+  }
+  
+  localStorage.setItem('cfosync-theme', theme)
+}
+
+// Initialize theme on load
+export const initializeTheme = () => {
+  const savedTheme = localStorage.getItem('cfosync-theme') as 'dark' | 'light' | null
+  const theme = savedTheme || 'dark'
+  applyTheme(theme)
+  return theme
+}
+
+// Currency formatting helper with conversion
+export const formatCurrency = (valueInUSD: number, currency: string = 'USD'): string => {
+  const symbols: Record<string, string> = {
+    'USD': '$',
+    'EUR': '€',
+    'GBP': '£',
+    'INR': '₹'
+  }
+  
+  // Convert from USD to target currency
+  const rate = EXCHANGE_RATES[currency] || 1
+  const convertedValue = valueInUSD * rate
+  
+  const symbol = symbols[currency] || '$'
+  
+  // Format based on currency
+  if (currency === 'INR') {
+    // Indian number format (lakhs, crores)
+    return `${symbol}${convertedValue.toLocaleString('en-IN', { 
+      minimumFractionDigits: 0, 
+      maximumFractionDigits: 0 
+    })}`
+  }
+  
+  return `${symbol}${convertedValue.toLocaleString('en-US', { 
+    minimumFractionDigits: 2, 
+    maximumFractionDigits: 2 
+  })}`
+}

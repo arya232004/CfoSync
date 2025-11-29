@@ -81,17 +81,45 @@ export async function invokeAgent(
 
 /**
  * Send a chat message through the coordinator agent
+ * Uses authenticated endpoint with full financial context
  */
 export async function sendChatMessage(
   message: string,
-  sessionId?: string,
-  context?: Record<string, any>
+  sessionId?: string
 ): Promise<AgentResponse> {
+  // Get auth token from localStorage
+  const token = localStorage.getItem('cfosync_token')
+  
+  if (token) {
+    // Use authenticated endpoint with financial context
+    try {
+      const response = await api.post('/chat', {
+        message,
+        session_id: sessionId || null,
+      }, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      return response.data
+    } catch (error: any) {
+      // If auth fails, fall back to legacy endpoint
+      if (error?.response?.status === 401) {
+        console.warn('Auth failed, falling back to legacy chat endpoint')
+      } else {
+        throw error
+      }
+    }
+  }
+  
+  // Fallback to legacy endpoint (no financial context)
   const response = await api.post('/chat', {
     user_id: getUserId(),
     message,
     session_id: sessionId || null,
-    context: context || null,
+    context: null,
+  }, {
+    baseURL: '' // Use root path for legacy /chat endpoint
   })
   return response.data
 }

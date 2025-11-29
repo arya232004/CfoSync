@@ -19,6 +19,8 @@ import {
   TrendingUp
 } from 'lucide-react'
 import { useAuthStore } from '../../lib/auth'
+import api from '../../lib/api'
+import toast from 'react-hot-toast'
 
 const steps = [
   { id: 1, title: 'Company Info', icon: Building2 },
@@ -117,6 +119,8 @@ export default function CompanyOnboarding() {
     documents: [],
   })
 
+  const [uploadedResults, setUploadedResults] = useState<{filename: string, type: string, success: boolean}[]>([])
+
   const updateData = (field: string, value: any) => {
     setData(prev => ({ ...prev, [field]: value }))
   }
@@ -136,22 +140,128 @@ export default function CompanyOnboarding() {
   const handleSubmit = async () => {
     setIsSubmitting(true)
     try {
-      // TODO: Submit data to backend
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      // First, upload and parse all CSV files
+      const csvFiles = data.documents.filter(f => f.name.endsWith('.csv'))
+      
+      for (const file of csvFiles) {
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('document_type', 'auto')
+        
+        try {
+          const uploadResponse = await api.post('/api/agents/company/upload-csv', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          })
+          console.log(`Uploaded ${file.name}:`, uploadResponse.data)
+          setUploadedResults(prev => [...prev, {
+            filename: file.name,
+            type: uploadResponse.data.document_type,
+            success: true
+          }])
+        } catch (uploadError) {
+          console.error(`Failed to upload ${file.name}:`, uploadError)
+          setUploadedResults(prev => [...prev, {
+            filename: file.name,
+            type: 'error',
+            success: false
+          }])
+        }
+      }
+
+      // Parse financial values from form (as fallback/supplement)
+      const parseRevenue = (range: string) => {
+        const map: Record<string, number> = {
+          'pre-revenue': 0,
+          'under-100k': 50000,
+          '100k-500k': 300000,
+          '500k-1m': 750000,
+          '1m-5m': 3000000,
+          '5m-10m': 7500000,
+          '10m-plus': 15000000
+        }
+        return map[range] || 0
+      }
+
+      const parseNumber = (str: string) => {
+        const num = parseFloat(str.replace(/[^0-9.-]/g, ''))
+        return isNaN(num) ? 0 : num
+      }
+
+      // Save company info (will merge with CSV-parsed data on backend)
+      const companyData = {
+        company_name: data.companyName,
+        industry: data.industry,
+        financials: {
+          revenue: parseRevenue(data.annualRevenue),
+          expenses: parseNumber(data.monthlyBurnRate) * 12,
+          cash_balance: parseNumber(data.cashOnHand),
+        }
+      }
+
+      await api.post('/api/agents/company/save', companyData)
+      
+      toast.success('Company data saved successfully!')
       navigate('/company/dashboard')
     } catch (error) {
       console.error('Error submitting onboarding:', error)
+      toast.error('Failed to save company data')
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
+      const newFiles = Array.from(e.target.files)
       setData(prev => ({
         ...prev,
-        documents: [...prev.documents, ...Array.from(e.target.files || [])]
+        documents: [...prev.documents, ...newFiles]
       }))
+      
+      // Immediately upload CSV files for parsing
+      for (const file of newFiles) {
+        if (file.name.endsWith('.csv')) {
+          toast.loading(`Parsing ${file.name}...`, { id: file.name })
+          
+          const formData = new FormData()
+          formData.append('file', file)
+          formData.append('document_type', 'auto')
+          
+          try {
+            const response = await api.post('/api/agents/company/upload-csv', formData, {
+              headers: { 'Content-Type': 'multipart/form-data' }
+            })
+            
+            const docType = response.data.document_type
+            let message = `Parsed ${file.name} as ${docType.replace('_', ' ')}`
+            
+            if (response.data.data) {
+              const d = response.data.data
+              if (d.revenue) message += ` - Revenue: $${d.revenue.toLocaleString()}`
+              if (d.net_income) message += `, Net Income: $${d.net_income.toLocaleString()}`
+              if (d.transactions_count) message += ` - ${d.transactions_count} transactions`
+              if (d.employees_count) message += ` - ${d.employees_count} employees`
+            }
+            
+            toast.success(message, { id: file.name, duration: 5000 })
+            
+            setUploadedResults(prev => [...prev, {
+              filename: file.name,
+              type: docType,
+              success: true
+            }])
+          } catch (error) {
+            console.error(`Failed to parse ${file.name}:`, error)
+            toast.error(`Failed to parse ${file.name}`, { id: file.name })
+            
+            setUploadedResults(prev => [...prev, {
+              filename: file.name,
+              type: 'error',
+              success: false
+            }])
+          }
+        }
+      }
     }
   }
 
@@ -488,23 +598,39 @@ export default function CompanyOnboarding() {
             {data.documents.length > 0 && (
               <div className="space-y-2">
                 <h4 className="text-white font-medium">Uploaded Files ({data.documents.length})</h4>
-                {data.documents.map((file, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 rounded-xl bg-dark-800 border border-white/10">
-                    <div className="flex items-center gap-3">
-                      <FileText className="w-5 h-5 text-primary-400" />
-                      <div>
-                        <p className="text-white text-sm">{file.name}</p>
-                        <p className="text-gray-500 text-xs">{(file.size / 1024).toFixed(1)} KB</p>
+                {data.documents.map((file, index) => {
+                  const result = uploadedResults.find(r => r.filename === file.name)
+                  return (
+                    <div key={index} className={`flex items-center justify-between p-3 rounded-xl bg-dark-800 border ${
+                      result?.success ? 'border-green-500/30' : result?.success === false ? 'border-red-500/30' : 'border-white/10'
+                    }`}>
+                      <div className="flex items-center gap-3">
+                        <FileText className={`w-5 h-5 ${result?.success ? 'text-green-400' : 'text-primary-400'}`} />
+                        <div>
+                          <p className="text-white text-sm">{file.name}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-gray-500 text-xs">{(file.size / 1024).toFixed(1)} KB</p>
+                            {result && (
+                              <span className={`text-xs px-2 py-0.5 rounded ${
+                                result.success 
+                                  ? 'bg-green-500/20 text-green-400' 
+                                  : 'bg-red-500/20 text-red-400'
+                              }`}>
+                                {result.success ? `✓ Parsed as ${result.type.replace('_', ' ')}` : '✗ Parse failed'}
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </div>
+                      <button
+                        onClick={() => removeFile(index)}
+                        className="text-red-400 hover:text-red-300 text-sm"
+                      >
+                        Remove
+                      </button>
                     </div>
-                    <button
-                      onClick={() => removeFile(index)}
-                      className="text-red-400 hover:text-red-300 text-sm"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
             

@@ -1,0 +1,36 @@
+Date,Description,Debit,Credit,Balance,Category
+2025-01-02,Opening Balance,,,285000,
+2025-01-05,Client Payment - ABC Corp,,45000,330000,Revenue
+2025-01-08,AWS Cloud Services,3200,,326800,Technology
+2025-01-10,Payroll - January,85000,,241800,Payroll
+2025-01-12,Office Rent,12000,,229800,Rent
+2025-01-15,Google Workspace,850,,228950,Technology
+2025-01-18,Client Payment - XYZ Inc,,32000,260950,Revenue
+2025-01-20,Insurance Premium,4500,,256450,Insurance
+2025-01-22,Marketing - Facebook Ads,5500,,250950,Marketing
+2025-01-25,Supplier Payment - Tech Parts,8200,,242750,Supplies
+2025-01-28,Consulting Revenue,,15000,257750,Revenue
+2025-01-31,Utilities - Electric,1200,,256550,Utilities
+2025-02-02,Client Payment - DEF Ltd,,28000,284550,Revenue
+2025-02-05,Slack Subscription,1500,,283050,Technology
+2025-02-08,Payroll - February,88000,,195050,Payroll
+2025-02-10,Office Supplies,650,,194400,Supplies
+2025-02-12,Client Payment - GHI Corp,,52000,246400,Revenue
+2025-02-15,Marketing - LinkedIn Ads,4200,,242200,Marketing
+2025-02-18,Software Licenses,2800,,239400,Technology
+2025-02-20,Travel - Sales Trip,3500,,235900,Travel
+2025-02-22,Client Payment - JKL Inc,,38000,273900,Revenue
+2025-02-25,AWS Cloud Services,3800,,270100,Technology
+2025-02-28,Utilities - Internet,450,,269650,Utilities
+2025-03-02,Client Payment - MNO Ltd,,41000,310650,Revenue
+2025-03-05,Payroll - March,92000,,218650,Payroll
+2025-03-08,Office Rent,12000,,206650,Rent
+2025-03-10,Marketing - Google Ads,6800,,199850,Marketing
+2025-03-12,Client Payment - PQR Corp,,35000,234850,Revenue
+2025-03-15,Equipment Purchase,15000,,219850,Equipment
+2025-03-18,Legal Services,4500,,215350,Professional Services
+2025-03-20,Client Payment - STU Inc,,48000,263350,Revenue
+2025-03-22,Insurance - Liability,2200,,261150,Insurance
+2025-03-25,Supplier Payment - Hardware,9500,,251650,Supplies
+2025-03-28,Consulting Revenue,,22000,273650,Revenue
+2025-03-31,Monthly Bank Fee,85,,273565,Fees

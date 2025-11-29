@@ -6,12 +6,14 @@ import {
   Sparkles, 
   Trash2,
   Bot,
-  User
+  User,
+  Info
 } from 'lucide-react'
 import { useChatStore } from '../lib/store'
 import { sendChatMessage, Message } from '../lib/api'
 import { cn, formatDate, generateId, agentColors, agentIcons } from '../lib/utils'
 import IndividualLayout from '../components/layouts/IndividualLayout'
+import { useAuthStore } from '../lib/auth'
 import toast from 'react-hot-toast'
 
 const quickPrompts = [
@@ -19,13 +21,16 @@ const quickPrompts = [
   "Create a savings plan",
   "What's my risk profile?",
   "Help me budget for next month",
-  "Simulate my retirement",
-  "Check my cash flow",
+  "What are my top spending categories?",
+  "How much have I saved this month?",
+  "Show me my investment portfolio",
+  "Track my financial goals progress",
 ]
 
 export default function Chat() {
   const [input, setInput] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const { user } = useAuthStore()
   
   const { messages, sessionId, isLoading, addMessage, setSessionId, setLoading, clearMessages } = useChatStore()
 
@@ -99,6 +104,12 @@ export default function Chat() {
 
   const headerActions = (
     <div className="flex items-center gap-3">
+      {user && (
+        <div className="flex items-center gap-2 text-sm text-green-400 bg-green-500/10 px-3 py-1.5 rounded-lg">
+          <Info className="w-4 h-4" />
+          Using your financial data
+        </div>
+      )}
       <button
         onClick={() => {
           clearMessages()
@@ -123,7 +134,7 @@ export default function Chat() {
           AI Financial Assistant
         </span>
       }
-      description="Powered by 11 specialized agents"
+      description={user ? `Personalized insights for ${user.name || user.email}` : "Powered by 11 specialized agents"}
       headerActions={headerActions}
     >
       <div className="flex flex-col h-[calc(100vh-180px)]">
@@ -138,14 +149,18 @@ export default function Chat() {
               <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center mb-6 animate-float">
                 <Bot className="w-10 h-10 text-white" />
               </div>
-              <h2 className="text-2xl font-bold mb-2">Welcome to CFOSync AI</h2>
+              <h2 className="text-2xl font-bold mb-2">
+                {user ? `Hello, ${user.name || 'there'}! 👋` : 'Welcome to CFOSync AI'}
+              </h2>
               <p className="text-gray-400 max-w-md mb-8">
-                I'm your AI financial assistant. Ask me anything about your finances,
-                and I'll coordinate with specialized agents to help you.
+                {user 
+                  ? "I have access to your financial data. Ask me about your spending, savings, investments, or goals - I'll give you personalized insights!"
+                  : "I'm your AI financial assistant. Ask me anything about your finances, and I'll coordinate with specialized agents to help you."
+                }
               </p>
 
               {/* Quick Prompts */}
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-w-2xl">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 max-w-3xl">
                 {quickPrompts.map((prompt, index) => (
                   <button
                     key={index}

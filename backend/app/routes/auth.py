@@ -195,3 +195,43 @@ async def verify_token(current_user: TokenData = Depends(get_current_user)):
         "user_type": current_user.user_type,
         "email": current_user.email,
     }
+
+
+from pydantic import BaseModel
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@router.post("/change-password")
+async def change_password(
+    request: ChangePasswordRequest,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Change user's password.
+    Requires current password for verification.
+    """
+    # Get user from database
+    user = await get_user_by_id(current_user.user_id)
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Verify current password
+    if not verify_password(request.current_password, user["password_hash"]):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    
+    # Validate new password
+    if len(request.new_password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    
+    # Update password
+    new_hash = get_password_hash(request.new_password)
+    await update_user(current_user.user_id, {
+        "password_hash": new_hash,
+        "updated_at": datetime.utcnow().isoformat()
+    })
+    
+    return {"message": "Password updated successfully"}

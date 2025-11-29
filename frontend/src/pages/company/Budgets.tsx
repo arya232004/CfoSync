@@ -1,8 +1,22 @@
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import aiService from '../../services/aiService';
-
-const { company: companyAI } = aiService;
+import { motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
+import {
+  PieChart,
+  TrendingUp,
+  RefreshCw,
+  Loader2,
+  Plus,
+  Brain,
+  Target,
+  DollarSign,
+  BarChart3,
+  ArrowRight
+} from 'lucide-react';
+import { useAuthStore } from '../../lib/auth';
+import { useSettingsStore, formatCurrency } from '../../lib/store';
+import api from '../../lib/api';
+import toast from 'react-hot-toast';
 
 interface Budget {
   id: string;
@@ -24,139 +38,96 @@ interface BudgetInsight {
 }
 
 const Budgets = () => {
-  const [aiLoading, setAiLoading] = useState({
-    analysis: false,
-    optimization: false,
-    forecast: false,
-  });
+  const { user } = useAuthStore();
+  const { currency } = useSettingsStore();
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [hasData, setHasData] = useState(false);
+  const [optimizing, setOptimizing] = useState(false);
+  
+  // Data states
+  const [budgets, setBudgets] = useState<Budget[]>([]);
   const [insights, setInsights] = useState<BudgetInsight[]>([]);
   const [selectedQuarter, setSelectedQuarter] = useState('Q1');
-  const [aiOptimizing, setAiOptimizing] = useState(false);
-
-  const totalBudget = 2450000;
-  const totalSpent = 1890000;
-  const totalForecast = 2380000;
-
-  const budgets: Budget[] = [
-    { 
-      id: '1', 
-      department: 'Engineering', 
-      allocated: 1200000, 
-      spent: 920000, 
-      forecast: 1180000,
-      status: 'on_track',
-      aiSuggestion: 'Consider reallocating $40K from tools to cloud infrastructure'
-    },
-    { 
-      id: '2', 
-      department: 'Sales & Marketing', 
-      allocated: 650000, 
-      spent: 545000, 
-      forecast: 680000,
-      status: 'at_risk',
-      aiSuggestion: 'Q4 campaign overspend projected - reduce digital ad spend by 15%'
-    },
-    { 
-      id: '3', 
-      department: 'Operations', 
-      allocated: 350000, 
-      spent: 275000, 
-      forecast: 340000,
-      status: 'on_track'
-    },
-    { 
-      id: '4', 
-      department: 'Product', 
-      allocated: 150000, 
-      spent: 95000, 
-      forecast: 120000,
-      status: 'on_track',
-      aiSuggestion: 'Underutilized budget - consider adding UX research tools'
-    },
-    { 
-      id: '5', 
-      department: 'HR & Admin', 
-      allocated: 100000, 
-      spent: 55000, 
-      forecast: 60000,
-      status: 'on_track'
-    },
-  ];
+  const [summary, setSummary] = useState({
+    totalBudget: 0,
+    totalSpent: 0,
+    totalForecast: 0,
+    utilization: 0
+  });
 
   useEffect(() => {
-    runBudgetAnalysis();
-  }, []);
+    loadBudgetData();
+  }, [selectedQuarter]);
 
-  const runBudgetAnalysis = async () => {
-    setAiLoading(prev => ({ ...prev, analysis: true }));
+  const loadBudgetData = async () => {
+    setLoading(true);
     try {
-      await companyAI.analyzeBudgets('company-1');
+      const response = await api.post('/api/agents/budgets', {
+        company_id: user?.id,
+        quarter: selectedQuarter
+      });
 
-      setInsights([
-        {
-          id: '1',
-          type: 'warning',
-          title: 'Sales & Marketing Overspend Risk',
-          message: 'Current trajectory shows 4.6% budget overrun by EOQ. Digital advertising costs 23% above plan.',
-          impact: '-$30K',
-          action: 'Review Ad Spend',
-        },
-        {
-          id: '2',
-          type: 'reallocation',
-          title: 'Budget Reallocation Opportunity',
-          message: 'Product department $30K under-utilized. Consider transferring to Engineering cloud costs.',
-          impact: 'Optimize $30K',
-          action: 'Transfer Funds',
-        },
-        {
-          id: '3',
-          type: 'optimization',
-          title: 'Vendor Consolidation Savings',
-          message: 'Consolidating 3 overlapping SaaS tools could save $18K annually across departments.',
-          impact: 'Save $18K/yr',
-          action: 'View Analysis',
-        },
-        {
-          id: '4',
-          type: 'forecast',
-          title: 'Next Quarter Projection',
-          message: 'AI predicts 8% increase needed in Engineering budget for planned hiring.',
-          impact: '+$96K Q2',
-        },
-      ]);
+      const data = response.data;
+      setHasData(data.hasData);
+
+      if (data.hasData) {
+        // Set budgets
+        setBudgets(data.budgets || []);
+        
+        // Set insights
+        setInsights(data.insights || []);
+        
+        // Set summary
+        if (data.summary) {
+          setSummary({
+            totalBudget: data.summary.totalBudget || 0,
+            totalSpent: data.summary.totalSpent || 0,
+            totalForecast: data.summary.totalForecast || 0,
+            utilization: data.summary.utilization || 0
+          });
+        }
+      }
     } catch (error) {
-      console.error('Budget analysis error:', error);
+      console.error('Error loading budgets:', error);
+      toast.error('Failed to load budget data');
+    } finally {
+      setLoading(false);
     }
-    setAiLoading(prev => ({ ...prev, analysis: false }));
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadBudgetData();
+    setRefreshing(false);
+    toast.success('Budget data refreshed');
   };
 
   const handleOptimizeBudgets = async () => {
-    setAiOptimizing(true);
+    setOptimizing(true);
     try {
-      await companyAI.analyzeBudgets('company-1');
+      // Simulate AI optimization
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
-      setInsights(prev => [{
+      const newInsight: BudgetInsight = {
         id: `opt-${Date.now()}`,
         type: 'optimization',
         title: 'AI Budget Optimization Complete',
-        message: 'Recommended $48K in reallocations across 4 departments to maximize ROI. Engineering +$20K for cloud, Sales -$30K from events, Product +$10K for tooling.',
-        impact: '+12% efficiency',
-        action: 'Apply Changes',
-      }, ...prev]);
+        message: 'Analyzed spending patterns and identified potential savings across departments.',
+        impact: '+8% efficiency',
+        action: 'Apply Changes'
+      };
+      
+      setInsights(prev => [newInsight, ...prev]);
+      toast.success('Budget optimization complete');
     } catch (error) {
-      console.error('Optimization error:', error);
+      toast.error('Optimization failed');
+    } finally {
+      setOptimizing(false);
     }
-    setAiOptimizing(false);
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-    }).format(amount);
-  };
+  const formatMoney = (amount: number) => formatCurrency(amount, currency);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -167,17 +138,68 @@ const Budgets = () => {
     }
   };
 
-  const getUtilization = (spent: number, allocated: number) => {
-    return Math.round((spent / allocated) * 100);
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'on_track': return { bg: 'bg-green-500/20', text: 'text-green-400', label: 'On Track' };
+      case 'at_risk': return { bg: 'bg-yellow-500/20', text: 'text-yellow-400', label: 'At Risk' };
+      case 'over_budget': return { bg: 'bg-red-500/20', text: 'text-red-400', label: 'Over Budget' };
+      default: return { bg: 'bg-gray-500/20', text: 'text-gray-400', label: 'Unknown' };
+    }
   };
 
+  const getUtilization = (spent: number, allocated: number) => {
+    return allocated > 0 ? Math.round((spent / allocated) * 100) : 0;
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-dark-900 via-dark-800 to-dark-900 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 text-primary-500 animate-spin mx-auto mb-4" />
+          <p className="text-gray-400">Analyzing budget data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // No Data State
+  if (!hasData) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-dark-900 via-dark-800 to-dark-900 p-6">
+        <div className="max-w-4xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="glass-card p-8 text-center"
+          >
+            <div className="w-20 h-20 bg-purple-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+              <PieChart className="w-10 h-10 text-purple-400" />
+            </div>
+            <h1 className="text-3xl font-bold text-white mb-4">Budget Management</h1>
+            <p className="text-gray-400 mb-8 max-w-lg mx-auto">
+              Add your department budgets to unlock AI-powered budget analysis, 
+              optimization suggestions, and spending forecasts.
+            </p>
+            <Link
+              to="/company/onboarding"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-500 to-accent-500 rounded-xl font-semibold text-white hover:shadow-glow transition-all"
+            >
+              <Plus className="w-5 h-5" />
+              Add Budget Data
+            </Link>
+          </motion.div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="p-6">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-dark-900 via-dark-800 to-dark-900 p-6">
+      <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold text-white mb-2">Budget Management</h1>
+            <h1 className="text-3xl font-bold text-white">Budget Management</h1>
             <p className="text-gray-400">AI-Powered Budget Analysis & Optimization</p>
           </div>
           
@@ -194,177 +216,155 @@ const Budgets = () => {
             </select>
             <button
               onClick={handleOptimizeBudgets}
-              disabled={aiOptimizing}
-              className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 transition-colors"
+              disabled={optimizing}
+              className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 transition-colors flex items-center gap-2"
             >
-              {aiOptimizing ? 'Optimizing...' : '🤖 AI Optimize'}
+              {optimizing ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Brain className="w-4 h-4" />
+              )}
+              AI Optimize
+            </button>
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="p-2 glass-card hover:bg-white/10 transition-colors"
+            >
+              <RefreshCw className={`w-5 h-5 text-gray-400 ${refreshing ? 'animate-spin' : ''}`} />
             </button>
           </div>
         </div>
 
-        {/* Overall Budget Summary */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-gradient-to-r from-primary-900/40 to-blue-900/40 rounded-2xl p-6 mb-8 border border-primary-500/30"
-        >
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div>
-              <div className="text-gray-400 text-sm mb-1">Total Budget</div>
-              <div className="text-3xl font-bold text-white">{formatCurrency(totalBudget)}</div>
+        {/* Summary Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="glass-card p-5"
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <Target className="w-5 h-5 text-blue-400" />
+              <span className="text-gray-400 text-sm">Total Budget</span>
             </div>
-            <div>
-              <div className="text-gray-400 text-sm mb-1">Spent YTD</div>
-              <div className="text-3xl font-bold text-white">{formatCurrency(totalSpent)}</div>
-              <div className="text-sm text-blue-400">{Math.round((totalSpent / totalBudget) * 100)}% utilized</div>
+            <div className="text-2xl font-bold text-white">{formatMoney(summary.totalBudget)}</div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="glass-card p-5"
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <DollarSign className="w-5 h-5 text-green-400" />
+              <span className="text-gray-400 text-sm">Total Spent</span>
             </div>
-            <div>
-              <div className="text-gray-400 text-sm mb-1">AI Forecast</div>
-              <div className="text-3xl font-bold text-white">{formatCurrency(totalForecast)}</div>
-              <div className={`text-sm ${totalForecast <= totalBudget ? 'text-green-400' : 'text-yellow-400'}`}>
-                {totalForecast <= totalBudget ? 'On track' : `${formatCurrency(totalForecast - totalBudget)} over`}
-              </div>
+            <div className="text-2xl font-bold text-white">{formatMoney(summary.totalSpent)}</div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="glass-card p-5"
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <TrendingUp className="w-5 h-5 text-purple-400" />
+              <span className="text-gray-400 text-sm">Forecast</span>
             </div>
-            <div>
-              <div className="text-gray-400 text-sm mb-1">Remaining</div>
-              <div className="text-3xl font-bold text-green-400">{formatCurrency(totalBudget - totalSpent)}</div>
-              <div className="text-sm text-gray-400">Available to allocate</div>
+            <div className="text-2xl font-bold text-white">{formatMoney(summary.totalForecast)}</div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="glass-card p-5"
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <BarChart3 className="w-5 h-5 text-yellow-400" />
+              <span className="text-gray-400 text-sm">Utilization</span>
             </div>
-          </div>
-          
-          {/* Overall Progress Bar */}
-          <div className="mt-6">
-            <div className="h-4 bg-dark-700 rounded-full overflow-hidden">
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${(totalSpent / totalBudget) * 100}%` }}
-                transition={{ duration: 1 }}
-                className="h-full bg-gradient-to-r from-primary-500 to-blue-500 rounded-full relative"
-              >
-                <div 
-                  className="absolute right-0 top-0 h-full w-1 bg-yellow-500"
-                  style={{ 
-                    left: `${((totalForecast - totalSpent) / totalBudget) * 100}%`,
-                    transform: 'translateX(-50%)'
-                  }}
-                  title="Forecasted spend"
-                />
-              </motion.div>
-            </div>
-            <div className="flex justify-between mt-2 text-xs text-gray-400">
-              <span>$0</span>
-              <span>Spent: {Math.round((totalSpent / totalBudget) * 100)}%</span>
-              <span>{formatCurrency(totalBudget)}</span>
-            </div>
-          </div>
-        </motion.div>
+            <div className="text-2xl font-bold text-white">{summary.utilization}%</div>
+          </motion.div>
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Department Budgets */}
+          {/* Budget List */}
           <div className="lg:col-span-2 space-y-6">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-dark-800 rounded-xl p-6 border border-dark-700"
+              className="glass-card p-6"
             >
               <h3 className="text-lg font-semibold text-white mb-4">Department Budgets</h3>
               
-              <div className="space-y-4">
-                {budgets.map((budget, index) => {
-                  const utilization = getUtilization(budget.spent, budget.allocated);
-                  const forecastUtilization = Math.round((budget.forecast / budget.allocated) * 100);
-                  
-                  return (
-                    <motion.div
-                      key={budget.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.1 }}
-                      className={`p-4 rounded-lg ${
-                        budget.aiSuggestion ? 'bg-dark-700/80 border border-yellow-500/20' : 'bg-dark-700/50'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-3 h-3 rounded-full ${getStatusColor(budget.status)}`} />
-                          <span className="text-white font-medium">{budget.department}</span>
-                        </div>
-                        <div className="flex items-center gap-4 text-sm">
-                          <span className="text-gray-400">
-                            {formatCurrency(budget.spent)} / {formatCurrency(budget.allocated)}
-                          </span>
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${
-                            budget.status === 'on_track' ? 'bg-green-500/20 text-green-400' :
-                            budget.status === 'at_risk' ? 'bg-yellow-500/20 text-yellow-400' :
-                            'bg-red-500/20 text-red-400'
-                          }`}>
-                            {utilization}%
-                          </span>
-                        </div>
-                      </div>
-                      
-                      {/* Progress bar with forecast marker */}
-                      <div className="relative h-3 bg-dark-600 rounded-full overflow-hidden mb-2">
-                        <motion.div
-                          initial={{ width: 0 }}
-                          animate={{ width: `${Math.min(utilization, 100)}%` }}
-                          transition={{ duration: 0.8, delay: index * 0.1 }}
-                          className={`h-full rounded-full ${
-                            budget.status === 'on_track' ? 'bg-green-500' :
-                            budget.status === 'at_risk' ? 'bg-yellow-500' : 'bg-red-500'
-                          }`}
-                        />
-                        {/* Forecast marker */}
-                        <div 
-                          className="absolute top-0 h-full w-0.5 bg-white/50"
-                          style={{ left: `${Math.min(forecastUtilization, 100)}%` }}
-                          title={`Forecast: ${forecastUtilization}%`}
-                        />
-                      </div>
-                      
-                      <div className="flex justify-between text-xs text-gray-500">
-                        <span>AI Forecast: {formatCurrency(budget.forecast)} ({forecastUtilization}%)</span>
-                        <span>Remaining: {formatCurrency(budget.allocated - budget.spent)}</span>
-                      </div>
-                      
-                      {budget.aiSuggestion && (
-                        <div className="mt-3 pt-3 border-t border-dark-600">
-                          <div className="flex items-start gap-2 text-yellow-400 text-sm">
-                            <span>🤖</span>
-                            <span>{budget.aiSuggestion}</span>
+              {budgets.length === 0 ? (
+                <p className="text-gray-400 text-center py-8">No budget data available.</p>
+              ) : (
+                <div className="space-y-4">
+                  {budgets.map((budget, index) => {
+                    const utilization = getUtilization(budget.spent, budget.allocated);
+                    const status = getStatusBadge(budget.status);
+                    
+                    return (
+                      <motion.div
+                        key={budget.id}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: index * 0.1 }}
+                        className={`p-4 rounded-lg bg-dark-700/50 ${
+                          budget.aiSuggestion ? 'border border-yellow-500/20' : ''
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-3 h-3 rounded-full ${getStatusColor(budget.status)}`} />
+                            <span className="text-white font-medium">{budget.department}</span>
+                            <span className={`px-2 py-1 rounded text-xs ${status.bg} ${status.text}`}>
+                              {status.label}
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-gray-400 text-sm">
+                              {formatMoney(budget.spent)} / {formatMoney(budget.allocated)}
+                            </span>
                           </div>
                         </div>
-                      )}
-                    </motion.div>
-                  );
-                })}
-              </div>
-            </motion.div>
+                        
+                        <div className="h-2 bg-dark-600 rounded-full overflow-hidden mb-2">
+                          <motion.div
+                            initial={{ width: 0 }}
+                            animate={{ width: `${Math.min(utilization, 100)}%` }}
+                            transition={{ duration: 0.8, delay: index * 0.1 }}
+                            className={`h-full rounded-full ${
+                              utilization > 100 ? 'bg-red-500' :
+                              utilization > 90 ? 'bg-yellow-500' : 'bg-green-500'
+                            }`}
+                          />
+                        </div>
+                        
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-400">{utilization}% utilized</span>
+                          <span className="text-gray-400">
+                            Forecast: {formatMoney(budget.forecast)}
+                          </span>
+                        </div>
 
-            {/* Budget Trends Chart Placeholder */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="bg-dark-800 rounded-xl p-6 border border-dark-700"
-            >
-              <h3 className="text-lg font-semibold text-white mb-4">Monthly Spending Trend</h3>
-              <div className="h-48 flex items-end justify-between gap-2">
-                {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'].map((month, index) => {
-                  const heights = [65, 72, 58, 80, 75, 68];
-                  return (
-                    <div key={month} className="flex-1 flex flex-col items-center gap-2">
-                      <motion.div
-                        initial={{ height: 0 }}
-                        animate={{ height: `${heights[index]}%` }}
-                        transition={{ duration: 0.8, delay: index * 0.1 }}
-                        className="w-full bg-gradient-to-t from-primary-600 to-primary-400 rounded-t-lg"
-                      />
-                      <span className="text-gray-400 text-xs">{month}</span>
-                    </div>
-                  );
-                })}
-              </div>
+                        {budget.aiSuggestion && (
+                          <div className="mt-3 pt-3 border-t border-dark-600">
+                            <div className="flex items-start gap-2 text-yellow-400 text-sm">
+                              <Brain className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                              <span>{budget.aiSuggestion}</span>
+                            </div>
+                          </div>
+                        )}
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              )}
             </motion.div>
           </div>
 
@@ -374,54 +374,56 @@ const Budgets = () => {
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
-              className="bg-dark-800 rounded-xl p-6 border border-dark-700"
+              className="glass-card p-6"
             >
               <div className="flex items-center gap-2 mb-4">
-                <span className="text-xl">🤖</span>
+                <Brain className="w-5 h-5 text-primary-400" />
                 <h3 className="text-lg font-semibold text-white">AI Budget Insights</h3>
               </div>
 
-              {aiLoading.analysis ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="animate-spin w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full" />
-                </div>
+              {insights.length === 0 ? (
+                <p className="text-gray-400 text-sm">No insights available yet.</p>
               ) : (
-                <AnimatePresence>
-                  <div className="space-y-3">
-                    {insights.map((insight, index) => (
-                      <motion.div
-                        key={insight.id}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.1 }}
-                        className={`p-4 rounded-lg border ${
-                          insight.type === 'warning' ? 'bg-yellow-900/20 border-yellow-500/30' :
-                          insight.type === 'optimization' ? 'bg-green-900/20 border-green-500/30' :
-                          insight.type === 'reallocation' ? 'bg-blue-900/20 border-blue-500/30' :
-                          'bg-purple-900/20 border-purple-500/30'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <span className={`text-xs px-2 py-1 rounded font-medium ${
-                            insight.type === 'warning' ? 'bg-yellow-500/30 text-yellow-400' :
-                            insight.type === 'optimization' ? 'bg-green-500/30 text-green-400' :
-                            insight.type === 'reallocation' ? 'bg-blue-500/30 text-blue-400' :
-                            'bg-purple-500/30 text-purple-400'
-                          }`}>
-                            {insight.impact}
-                          </span>
-                        </div>
-                        <div className="text-white font-medium text-sm mb-1">{insight.title}</div>
-                        <div className="text-gray-400 text-sm">{insight.message}</div>
-                        {insight.action && (
-                          <button className="mt-2 text-xs text-primary-400 hover:text-primary-300">
-                            {insight.action} →
-                          </button>
-                        )}
-                      </motion.div>
-                    ))}
-                  </div>
-                </AnimatePresence>
+                <div className="space-y-3">
+                  {insights.map((insight, index) => (
+                    <motion.div
+                      key={insight.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.1 }}
+                      className={`p-4 rounded-lg border ${
+                        insight.type === 'warning' ? 'bg-yellow-900/20 border-yellow-500/30' :
+                        insight.type === 'reallocation' ? 'bg-blue-900/20 border-blue-500/30' :
+                        insight.type === 'optimization' ? 'bg-green-900/20 border-green-500/30' :
+                        'bg-purple-900/20 border-purple-500/30'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className={`text-xs px-2 py-1 rounded font-medium uppercase ${
+                          insight.type === 'warning' ? 'bg-yellow-500/30 text-yellow-400' :
+                          insight.type === 'reallocation' ? 'bg-blue-500/30 text-blue-400' :
+                          insight.type === 'optimization' ? 'bg-green-500/30 text-green-400' :
+                          'bg-purple-500/30 text-purple-400'
+                        }`}>
+                          {insight.type}
+                        </span>
+                        <span className={`text-xs ${
+                          insight.impact.includes('+') ? 'text-green-400' :
+                          insight.impact.includes('-') ? 'text-red-400' : 'text-gray-400'
+                        }`}>
+                          {insight.impact}
+                        </span>
+                      </div>
+                      <div className="text-white font-medium text-sm mb-1">{insight.title}</div>
+                      <div className="text-gray-400 text-sm mb-2">{insight.message}</div>
+                      {insight.action && (
+                        <button className="text-primary-400 text-sm flex items-center gap-1 hover:underline">
+                          {insight.action} <ArrowRight className="w-3 h-3" />
+                        </button>
+                      )}
+                    </motion.div>
+                  ))}
+                </div>
               )}
             </motion.div>
 
@@ -430,22 +432,25 @@ const Budgets = () => {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.1 }}
-              className="bg-dark-800 rounded-xl p-6 border border-dark-700"
+              className="glass-card p-6"
             >
               <h3 className="text-lg font-semibold text-white mb-4">Quick Actions</h3>
               <div className="space-y-2">
-                <button className="w-full py-3 px-4 bg-dark-700 text-white rounded-lg hover:bg-dark-600 transition-colors text-sm text-left flex items-center gap-3">
-                  <span>📊</span> Generate Budget Report
+                <button className="w-full py-3 px-4 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm flex items-center justify-center gap-2">
+                  <BarChart3 className="w-4 h-4" />
+                  Generate Budget Report
                 </button>
-                <button className="w-full py-3 px-4 bg-dark-700 text-white rounded-lg hover:bg-dark-600 transition-colors text-sm text-left flex items-center gap-3">
-                  <span>🔄</span> Reallocate Funds
+                <button className="w-full py-3 px-4 bg-dark-700 text-white rounded-lg hover:bg-dark-600 transition-colors text-sm flex items-center justify-center gap-2">
+                  <TrendingUp className="w-4 h-4" />
+                  Forecast Next Quarter
                 </button>
-                <button className="w-full py-3 px-4 bg-dark-700 text-white rounded-lg hover:bg-dark-600 transition-colors text-sm text-left flex items-center gap-3">
-                  <span>📈</span> Compare to Prior Year
-                </button>
-                <button className="w-full py-3 px-4 bg-dark-700 text-white rounded-lg hover:bg-dark-600 transition-colors text-sm text-left flex items-center gap-3">
-                  <span>🎯</span> Set Department Goals
-                </button>
+                <Link
+                  to="/company/onboarding"
+                  className="w-full py-3 px-4 bg-dark-700 text-white rounded-lg hover:bg-dark-600 transition-colors text-sm flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Department Budget
+                </Link>
               </div>
             </motion.div>
           </div>

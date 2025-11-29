@@ -21,8 +21,10 @@ const getAuthHeaders = () => {
 
 // Create authenticated axios instance
 const authAxios = {
-  post: (url: string, data?: unknown) => axios.post(url, data, { headers: getAuthHeaders() }),
+  post: (url: string, data?: unknown, config?: { headers?: Record<string, string> }) => 
+    axios.post(url, data, { ...config, headers: { ...getAuthHeaders(), ...config?.headers } }),
   get: (url: string, config?: unknown) => axios.get(url, { ...config as object, headers: getAuthHeaders() }),
+  put: (url: string, data?: unknown) => axios.put(url, data, { headers: getAuthHeaders() }),
   delete: (url: string) => axios.delete(url, { headers: getAuthHeaders() }),
 }
 
@@ -567,6 +569,7 @@ export const sharedAI = {
 // ─────────────────────────────────────────────────────────────
 
 export interface DashboardData {
+  hasData?: boolean
   financialHealth: { score: number; trend: string; change: number }
   metrics: { netWorth: number; monthlyIncome: number; monthlyExpenses: number; savingsRate: number }
   recentTransactions: { id: string; description: string; amount: number; type: string; category: string; date: string }[]
@@ -576,6 +579,8 @@ export interface DashboardData {
 }
 
 export interface InvestmentsData {
+  hasData?: boolean
+  message?: string
   portfolioSummary: { totalValue: number; totalGain: number; totalGainPercent: number; dayChange: number; dayChangePercent: number }
   assetAllocation: { name: string; value: number; percent: number; color: string }[]
   holdings: { symbol: string; name: string; shares: number; price: number; value: number; change: number; changePercent: number }[]
@@ -592,7 +597,17 @@ export interface PlanningData {
 
 export interface SimulatorConfig {
   defaults: { currentAge: number; retirementAge: number; currentIncome: number; currentSavings: number; monthlyExpenses: number }
-  lifeEvents: { id: string; name: string; icon: string; color: string; avgCost: number; description: string }[]
+  lifeEvents: { 
+    id: string
+    name: string
+    icon: string
+    color: string
+    avgCost: number
+    description: string
+    costRange?: { min: number; max: number }
+  }[]
+  hasRealData?: boolean
+  dataMessage?: string
 }
 
 export interface SimulationResult {
@@ -608,8 +623,22 @@ export interface SimulationResult {
 
 export interface SimulationResponse {
   results: SimulationResult[]
-  summary: { retirementNetWorth: number; totalEventCosts: number; eventsCount: number; isOnTrack: boolean; yearsOfExpenses: number }
+  summary: { 
+    retirementNetWorth: number
+    totalEventCosts: number
+    eventsCount: number
+    isOnTrack: boolean
+    yearsOfExpenses: number
+    peakNetWorth?: number
+    peakAge?: number
+    finalNetWorth?: number
+    savingsRate?: number
+  }
   aiAnalysis: { type: string; title: string; description: string }[]
+  scenarios?: {
+    optimistic: { netWorth: number; description: string }
+    pessimistic: { netWorth: number; description: string }
+  }
 }
 
 export const pageDataService = {
@@ -727,7 +756,7 @@ export interface FinancialSummary {
 
 export const statementsAPI = {
   // Upload a statement with its transactions
-  async uploadStatement(statement: StatementData): Promise<{ success: boolean; statement_id: string; transactions_saved: number }> {
+  async uploadStatement(statement: StatementData): Promise<{ success: boolean; statement_id?: string; transactions_saved?: number; duplicate?: boolean; message?: string }> {
     try {
       const response = await authAxios.post(`${API_URL}/statements/upload`, statement)
       return response.data
@@ -792,11 +821,381 @@ export const statementsAPI = {
   }
 }
 
+// ─────────────────────────────────────────────────────────────
+// Investment Portfolio API Service
+// ─────────────────────────────────────────────────────────────
+
+export interface PortfolioHolding {
+  symbol: string
+  shares: number
+  purchase_price: number
+  purchase_date?: string
+  name?: string
+  sector?: string
+  // Enriched data from live API
+  current_price?: number
+  current_value?: number
+  cost_basis?: number
+  gain_loss?: number
+  gain_loss_percent?: number
+  day_change?: number
+  company_name?: string
+}
+
+export interface Portfolio {
+  holdings: PortfolioHolding[]
+  totalValue: number
+  totalCost: number
+  totalGainLoss: number
+  totalGainLossPercent: number
+  holdingsCount?: number
+  riskTolerance?: string
+}
+
+export interface InvestmentAnalysis {
+  totalValue: number
+  totalCost: number
+  totalGainLoss: number
+  totalGainLossPercent: number
+  holdings?: PortfolioHolding[]
+  riskMetrics?: {
+    volatility?: number
+    sharpe_ratio?: number
+    beta?: number
+    max_drawdown?: number
+  }
+  riskAssessment?: {
+    risk_score: number
+    risk_level: string
+    concentration_risks: Array<{
+      sector: string
+      percentage: number
+      severity: string
+      recommendation: string
+    }>
+    volatility_risks: Array<{
+      symbol: string
+      volatility: number
+      severity: string
+    }>
+  }
+  sectorAllocation?: Record<string, number>
+  sectorDetails?: Record<string, any>
+  hedgingStrategies?: Array<{
+    type: string
+    sector?: string
+    instruments: string[]
+    reason: string
+    suggested_allocation: string
+  }>
+  diversificationScore?: number
+  topPerformers?: PortfolioHolding[]
+  worstPerformers?: PortfolioHolding[]
+}
+
+export interface InvestmentRecommendationItem {
+  type: 'buy' | 'sell' | 'hold' | 'rebalance' | 'hedge' | 'diversify'
+  symbol?: string
+  title: string
+  description: string
+  reason: string
+  priority: 'high' | 'medium' | 'low'
+  action?: string
+}
+
+export interface StockData {
+  symbol: string
+  name?: string
+  current_price: number
+  change_percent: number
+  volume?: number
+  market_cap?: number
+  pe_ratio?: number
+  dividend_yield?: number
+  sector?: string
+  high_52w?: number
+  low_52w?: number
+}
+
+export const investmentsAPI = {
+  // Get user's portfolio with live prices
+  async getPortfolio(): Promise<{ hasData: boolean; portfolio: Portfolio; message?: string }> {
+    try {
+      const response = await authAxios.get(`${API_URL}/agents/investments/portfolio`)
+      return response.data
+    } catch (error) {
+      console.error('Error fetching portfolio:', error)
+      return {
+        hasData: false,
+        portfolio: {
+          holdings: [],
+          totalValue: 0,
+          totalCost: 0,
+          totalGainLoss: 0,
+          totalGainLossPercent: 0
+        },
+        message: 'Error loading portfolio'
+      }
+    }
+  },
+
+  // Save portfolio holdings
+  async savePortfolio(holdings: PortfolioHolding[], riskTolerance: string = 'moderate'): Promise<{ success: boolean; message: string; holdingsCount?: number; warnings?: string[] }> {
+    try {
+      const response = await authAxios.post(`${API_URL}/agents/investments/portfolio`, {
+        holdings,
+        risk_tolerance: riskTolerance
+      })
+      return response.data
+    } catch (error) {
+      console.error('Error saving portfolio:', error)
+      throw error
+    }
+  },
+
+  // Add a single holding
+  async addHolding(holding: PortfolioHolding): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await authAxios.post(`${API_URL}/agents/investments/holding`, { holding })
+      return response.data
+    } catch (error) {
+      console.error('Error adding holding:', error)
+      throw error
+    }
+  },
+
+  // Remove a holding
+  async removeHolding(symbol: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await authAxios.delete(`${API_URL}/agents/investments/holding/${symbol}`)
+      return response.data
+    } catch (error) {
+      console.error('Error removing holding:', error)
+      throw error
+    }
+  },
+
+  // Clear entire portfolio
+  async clearPortfolio(): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await authAxios.delete(`${API_URL}/agents/investments/portfolio`)
+      return response.data
+    } catch (error) {
+      console.error('Error clearing portfolio:', error)
+      throw error
+    }
+  },
+
+  // Get portfolio analysis with AI insights
+  async analyzePortfolio(riskTolerance: string = 'moderate', includeRecommendations: boolean = true): Promise<{
+    hasData: boolean
+    analysis?: InvestmentAnalysis
+    recommendations?: InvestmentRecommendationItem[]
+    message?: string
+  }> {
+    try {
+      const response = await authAxios.post(`${API_URL}/agents/investments/analyze`, {
+        risk_tolerance: riskTolerance,
+        include_recommendations: includeRecommendations
+      })
+      return response.data
+    } catch (error) {
+      console.error('Error analyzing portfolio:', error)
+      throw error
+    }
+  },
+
+  // Get stock data for symbols
+  async getStockData(symbols: string[]): Promise<{ hasData: boolean; stocks: Record<string, StockData>; message?: string }> {
+    try {
+      const response = await authAxios.post(`${API_URL}/agents/investments/stock-data`, { symbols })
+      return response.data
+    } catch (error) {
+      console.error('Error fetching stock data:', error)
+      return { hasData: false, stocks: {}, message: 'Error loading stock data' }
+    }
+  },
+
+  // Get market overview
+  async getMarketOverview(sectors?: string[]): Promise<{ hasData: boolean; market: any; message?: string }> {
+    try {
+      const response = await authAxios.post(`${API_URL}/agents/investments/market-overview`, { sectors })
+      return response.data
+    } catch (error) {
+      console.error('Error fetching market overview:', error)
+      return { hasData: false, market: {}, message: 'Error loading market data' }
+    }
+  },
+
+  // Get AI-powered recommendations
+  async getRecommendations(): Promise<{
+    hasData: boolean
+    recommendations: InvestmentRecommendationItem[]
+    portfolioHealth?: string
+    message?: string
+  }> {
+    try {
+      const response = await authAxios.get(`${API_URL}/agents/investments/recommendations`)
+      return response.data
+    } catch (error) {
+      console.error('Error fetching recommendations:', error)
+      return { hasData: false, recommendations: [], message: 'Error loading recommendations' }
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Goals API Service
+// ─────────────────────────────────────────────────────────────
+
+export interface Goal {
+  id?: string
+  user_id?: string
+  name: string
+  description?: string
+  target: number
+  current: number
+  targetDate: string
+  monthlyContribution: number
+  icon: string
+  color: string
+  priority: 'high' | 'medium' | 'low'
+  category: 'savings' | 'investment' | 'debt' | 'purchase' | 'emergency' | 'retirement' | 'general'
+  progress?: number
+  status?: 'on-track' | 'at-risk' | 'behind' | 'completed' | 'overdue'
+  estimatedMonthsToComplete?: number
+  monthlyAvailable?: number
+  created_at?: string
+  updated_at?: string
+}
+
+export interface GoalAnalysis {
+  summary: {
+    progress: number
+    amountRemaining: number
+    monthsToComplete: number
+    monthsUntilDeadline: number
+    isOnTrack: boolean
+    currentContribution: number
+    optimalContribution: number
+    contributionGap: number
+  }
+  financialContext: {
+    monthlyIncome: number
+    monthlyExpenses: number
+    monthlySavings: number
+    savingsRate: number
+    goalAllocation: number
+  }
+  recommendations: Array<{
+    title: string
+    description: string
+    impact: 'high' | 'medium' | 'low'
+    actionable: boolean
+  }>
+  accelerators: Array<{
+    title: string
+    description: string
+    potentialIncrease: number
+  }>
+  risks: Array<{
+    title: string
+    severity: 'high' | 'medium' | 'low'
+    description: string
+    mitigation: string
+  }>
+  projections: {
+    currentPace: { completionDate: string; monthsToComplete: number }
+    optimizedPace: { completionDate: string; monthsToComplete: number }
+    aggressivePace: { completionDate: string; monthsToComplete: number }
+  }
+}
+
+export interface GoalsResponse {
+  success: boolean
+  goals: Goal[]
+  financialSummary?: {
+    monthlyIncome: number
+    monthlyExpenses: number
+    monthlySavings: number
+  }
+}
+
+export const goalsAPI = {
+  // Create a new goal
+  async createGoal(goal: Omit<Goal, 'id' | 'user_id' | 'progress' | 'status' | 'created_at' | 'updated_at'>): Promise<{ success: boolean; goal: Goal }> {
+    try {
+      const response = await authAxios.post(`${API_URL}/agents/goals`, goal)
+      return response.data
+    } catch (error) {
+      console.error('Error creating goal:', error)
+      throw error
+    }
+  },
+
+  // Get all goals for current user
+  async getGoals(): Promise<GoalsResponse> {
+    try {
+      const response = await authAxios.get(`${API_URL}/agents/goals`)
+      return response.data
+    } catch (error) {
+      console.error('Error fetching goals:', error)
+      return { success: false, goals: [] }
+    }
+  },
+
+  // Get a specific goal
+  async getGoal(goalId: string): Promise<{ success: boolean; goal: Goal }> {
+    try {
+      const response = await authAxios.get(`${API_URL}/agents/goals/${goalId}`)
+      return response.data
+    } catch (error) {
+      console.error('Error fetching goal:', error)
+      throw error
+    }
+  },
+
+  // Update a goal
+  async updateGoal(goalId: string, updates: Partial<Goal>): Promise<{ success: boolean; goal: Goal }> {
+    try {
+      const response = await authAxios.put(`${API_URL}/agents/goals/${goalId}`, updates)
+      return response.data
+    } catch (error) {
+      console.error('Error updating goal:', error)
+      throw error
+    }
+  },
+
+  // Delete a goal
+  async deleteGoal(goalId: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await authAxios.delete(`${API_URL}/agents/goals/${goalId}`)
+      return response.data
+    } catch (error) {
+      console.error('Error deleting goal:', error)
+      throw error
+    }
+  },
+
+  // Get AI analysis for a goal
+  async getGoalAnalysis(goalId: string): Promise<{ success: boolean; analysis: GoalAnalysis }> {
+    try {
+      const response = await authAxios.get(`${API_URL}/agents/goals/${goalId}/analysis`)
+      return response.data
+    } catch (error) {
+      console.error('Error fetching goal analysis:', error)
+      throw error
+    }
+  }
+}
+
 export default {
   individual: individualAI,
   company: companyAI,
   shared: sharedAI,
   pageData: pageDataService,
-  statements: statementsAPI
+  statements: statementsAPI,
+  investments: investmentsAPI,
+  goals: goalsAPI
 }
 

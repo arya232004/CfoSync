@@ -2,6 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  /* CSS Variables for theming */
+  --bg-primary: #0f0f1a;
+  --bg-secondary: #1a1a2e;
+  --bg-card: rgba(255, 255, 255, 0.05);
+  --text-primary: #ffffff;
+  --text-secondary: #a0a0a0;
+  --border-color: rgba(255, 255, 255, 0.1);
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -12,12 +22,24 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Dark mode (default) */
 body {
   font-family: 'Inter', system-ui, sans-serif;
   background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
   min-height: 100vh;
   color: #f1f5f9;
   overflow-x: hidden;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+/* Light mode styles */
+html.light body {
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #f8fafc 100%);
+  color: #1e293b;
+}
+
+html.light {
+  color-scheme: light;
 }
 
 /* Custom Scrollbar */
@@ -43,6 +65,13 @@ body {
   .glass-card {
     @apply bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s ease;
+  }
+  
+  /* Light mode glass card */
+  html.light .glass-card {
+    @apply bg-slate-100/90 border-slate-200;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   }
 
   .glass-card-hover {
@@ -53,6 +82,11 @@ body {
     @apply bg-white/10 border-white/20;
     box-shadow: 0 12px 40px rgba(99, 102, 241, 0.2);
     transform: translateY(-4px);
+  }
+  
+  html.light .glass-card-hover:hover {
+    @apply bg-slate-50 border-slate-300;
+    box-shadow: 0 12px 40px rgba(99, 102, 241, 0.15);
   }
 
   .gradient-text {
@@ -70,14 +104,30 @@ body {
     @apply px-6 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl font-semibold text-white;
     @apply transition-all duration-300 hover:bg-white/20 hover:border-white/30;
   }
+  
+  html.light .btn-secondary {
+    @apply bg-slate-100 border-slate-300 text-slate-800;
+  }
+  
+  html.light .btn-secondary:hover {
+    @apply bg-slate-200 border-slate-400;
+  }
 
   .input-field {
     @apply w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-400;
     @apply focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all;
   }
+  
+  html.light .input-field {
+    @apply bg-white border-slate-300 text-slate-800 placeholder-slate-400;
+  }
 
   .nav-link {
     @apply text-gray-300 hover:text-white transition-colors duration-200 relative;
+  }
+  
+  html.light .nav-link {
+    @apply text-slate-600 hover:text-slate-900;
   }
 
   .nav-link::after {
@@ -94,6 +144,10 @@ body {
     @apply glass-card p-6;
     background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.05) 100%);
   }
+  
+  html.light .metric-card {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(139, 92, 246, 0.04) 100%);
+  }
 
   .chat-bubble-user {
     @apply bg-gradient-to-r from-primary-500 to-accent-500 text-white rounded-2xl rounded-br-md px-4 py-3;
@@ -102,15 +156,52 @@ body {
   .chat-bubble-ai {
     @apply glass-card text-gray-100 rounded-2xl rounded-bl-md px-4 py-3;
   }
+  
+  html.light .chat-bubble-ai {
+    @apply text-slate-700;
+  }
 
   .sidebar-item {
     @apply flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 transition-all duration-200;
     @apply hover:bg-white/5 hover:text-white;
   }
+  
+  html.light .sidebar-item {
+    @apply text-slate-600 hover:bg-slate-200 hover:text-slate-900;
+  }
 
   .sidebar-item.active {
     @apply bg-gradient-to-r from-primary-500/20 to-accent-500/20 text-white border-l-2 border-primary-500;
   }
+  
+  html.light .sidebar-item.active {
+    @apply text-primary-700;
+  }
+}
+
+/* Light mode scrollbar */
+html.light ::-webkit-scrollbar-track {
+  background: #e2e8f0;
+}
+
+html.light ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #6366f1, #8b5cf6);
+}
+
+/* Light mode background effects */
+html.light .bg-grid {
+  background-image: 
+    linear-gradient(rgba(99, 102, 241, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(99, 102, 241, 0.08) 1px, transparent 1px);
+}
+
+html.light .bg-dots {
+  background-image: radial-gradient(rgba(99, 102, 241, 0.25) 1px, transparent 1px);
+}
+
+/* Light mode gradient orbs - more subtle */
+html.light .gradient-orb {
+  opacity: 0.15;
 }
 
 /* Animations */
@@ -211,4 +302,90 @@ body {
 @keyframes bounce {
   0%, 80%, 100% { transform: scale(0); }
   40% { transform: scale(1); }
+}
+
+/* Light Mode Text Overrides */
+html.light .text-white {
+  color: #1e293b !important;
+}
+
+html.light .text-gray-100 {
+  color: #334155 !important;
+}
+
+html.light .text-gray-200 {
+  color: #475569 !important;
+}
+
+html.light .text-gray-300 {
+  color: #64748b !important;
+}
+
+html.light .text-gray-400 {
+  color: #94a3b8 !important;
+}
+
+html.light .text-gray-500 {
+  color: #64748b !important;
+}
+
+/* Keep specific colored text visible */
+html.light .text-primary-400,
+html.light .text-primary-500,
+html.light .text-green-400,
+html.light .text-green-500,
+html.light .text-red-400,
+html.light .text-red-500,
+html.light .text-yellow-400,
+html.light .text-yellow-500,
+html.light .text-blue-400,
+html.light .text-blue-500 {
+  color: inherit;
+}
+
+/* Light mode backgrounds */
+html.light .bg-dark-900 {
+  background: #f8fafc !important;
+}
+
+html.light .bg-dark-800 {
+  background: #f1f5f9 !important;
+}
+
+html.light .bg-dark-700 {
+  background: #e2e8f0 !important;
+}
+
+html.light .bg-dark-600 {
+  background: #cbd5e1 !important;
+}
+
+html.light .bg-white\/5 {
+  background: rgba(15, 23, 42, 0.03) !important;
+}
+
+html.light .bg-white\/10 {
+  background: rgba(15, 23, 42, 0.05) !important;
+}
+
+html.light .border-white\/10 {
+  border-color: rgba(15, 23, 42, 0.1) !important;
+}
+
+html.light .border-white\/20 {
+  border-color: rgba(15, 23, 42, 0.15) !important;
+}
+
+/* Light mode placeholder colors */
+html.light ::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* Light mode for specific components */
+html.light .from-dark-900 {
+  --tw-gradient-from: #f8fafc !important;
+}
+
+html.light .to-dark-800 {
+  --tw-gradient-to: #f1f5f9 !important;
 }

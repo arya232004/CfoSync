@@ -1,0 +1,25 @@
+Account,Category,Amount
+Cash and Cash Equivalents,Current Assets,285000
+Accounts Receivable,Current Assets,142000
+Inventory,Current Assets,68000
+Prepaid Expenses,Current Assets,15000
+Total Current Assets,Current Assets,510000
+Property and Equipment,Fixed Assets,185000
+Less: Accumulated Depreciation,Fixed Assets,-45000
+Net Property and Equipment,Fixed Assets,140000
+Intangible Assets,Fixed Assets,35000
+Total Fixed Assets,Fixed Assets,175000
+Total Assets,Assets,685000
+Accounts Payable,Current Liabilities,52000
+Accrued Expenses,Current Liabilities,28000
+Short-term Debt,Current Liabilities,25000
+Current Portion of Long-term Debt,Current Liabilities,12000
+Total Current Liabilities,Current Liabilities,117000
+Long-term Debt,Long-term Liabilities,95000
+Deferred Tax Liabilities,Long-term Liabilities,8500
+Total Long-term Liabilities,Long-term Liabilities,103500
+Total Liabilities,Liabilities,220500
+Common Stock,Equity,150000
+Retained Earnings,Equity,314500
+Total Stockholders Equity,Equity,464500
+Total Liabilities and Equity,Total,685000

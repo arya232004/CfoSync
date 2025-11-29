@@ -14,13 +14,12 @@ import {
   Sparkles,
   ArrowRight,
   Clock,
-  TrendingUp,
-  Loader2
+  TrendingUp
 } from 'lucide-react'
 import { useDropzone } from 'react-dropzone'
 import IndividualLayout from '../../components/layouts/IndividualLayout'
 import { useStatementsStore, Transaction } from '../../lib/store'
-import { statementsAPI, StatementTransaction } from '../../services/aiService'
+import { statementsAPI } from '../../services/aiService'
 import toast from 'react-hot-toast'
 
 interface UploadedFile {
@@ -64,62 +63,147 @@ const getRelativeTime = (dateString: string) => {
   return date.toLocaleDateString()
 }
 
-// Generate realistic transactions from uploaded statement
-const generateTransactions = (fileName: string, count: number): Transaction[] => {
-  const categories = ['Food & Dining', 'Shopping', 'Bills & Utilities', 'Transportation', 'Entertainment', 'Healthcare', 'Income', 'Transfer']
-  const merchants: Record<string, string[]> = {
-    'Food & Dining': ['Starbucks', 'McDonald\'s', 'Uber Eats', 'DoorDash', 'Whole Foods', 'Trader Joe\'s', 'Chipotle'],
-    'Shopping': ['Amazon', 'Target', 'Walmart', 'Best Buy', 'Nike', 'Apple Store', 'IKEA'],
-    'Bills & Utilities': ['Electric Company', 'Water Utility', 'Internet Provider', 'Phone Bill', 'Netflix', 'Spotify'],
-    'Transportation': ['Shell Gas', 'Uber', 'Lyft', 'Parking', 'Metro Card', 'Car Insurance'],
-    'Entertainment': ['AMC Theaters', 'Concert Tickets', 'Steam Games', 'Gym Membership', 'Disney+'],
-    'Healthcare': ['CVS Pharmacy', 'Doctor Visit', 'Dental Care', 'Vision Center'],
-    'Income': ['Salary Deposit', 'Direct Deposit', 'Freelance Payment', 'Refund', 'Cash Back'],
-    'Transfer': ['Bank Transfer', 'Zelle', 'Venmo', 'PayPal']
+// Helper to format date strings
+const formatDateString = (dateStr: string): string => {
+  try {
+    const date = new Date(dateStr)
+    if (!isNaN(date.getTime())) {
+      return date.toISOString()
+    }
+    const parts = dateStr.split(/[\/\-]/)
+    if (parts.length === 3) {
+      const [a, b, c] = parts
+      if (parseInt(a) > 12) {
+        return new Date(parseInt(a), parseInt(b) - 1, parseInt(c)).toISOString()
+      } else {
+        return new Date(parseInt(c), parseInt(a) - 1, parseInt(b)).toISOString()
+      }
+    }
+    return new Date().toISOString()
+  } catch {
+    return new Date().toISOString()
+  }
+}
+
+// Auto-categorize transaction based on description
+const categorizeTransaction = (description: string): string => {
+  const desc = description?.toLowerCase() || ''
+  
+  if (desc.includes('deposit') || desc.includes('payroll') || desc.includes('salary') || 
+      desc.includes('direct dep') || desc.includes('income')) {
+    return 'Income'
+  }
+  if (desc.includes('rent') || desc.includes('mortgage') || desc.includes('apartment') ||
+      desc.includes('housing') || desc.includes('hoa')) {
+    return 'Housing'
+  }
+  if (desc.includes('whole foods') || desc.includes('trader joe') || desc.includes('costco') ||
+      desc.includes('grocery') || desc.includes('safeway') || desc.includes('kroger') ||
+      desc.includes('aldi') || desc.includes('wegmans') || desc.includes('publix')) {
+    return 'Groceries'
+  }
+  if (desc.includes('starbucks') || desc.includes('mcdonald') || desc.includes('chipotle') ||
+      desc.includes('restaurant') || desc.includes('doordash') || desc.includes('uber eats') ||
+      desc.includes('grubhub') || desc.includes('dining') || desc.includes('cafe') ||
+      desc.includes('coffee') || desc.includes('pizza')) {
+    return 'Dining'
+  }
+  if (desc.includes('uber') || desc.includes('lyft') || desc.includes('gas') ||
+      desc.includes('shell') || desc.includes('chevron') || desc.includes('exxon') ||
+      desc.includes('parking') || desc.includes('metro') || desc.includes('transit') ||
+      desc.includes('car') || desc.includes('auto')) {
+    return 'Transportation'
+  }
+  if (desc.includes('electric') || desc.includes('water') || desc.includes('gas bill') ||
+      desc.includes('utility') || desc.includes('comcast') || desc.includes('verizon') ||
+      desc.includes('at&t') || desc.includes('internet') || desc.includes('phone bill')) {
+    return 'Utilities'
+  }
+  if (desc.includes('netflix') || desc.includes('spotify') || desc.includes('hulu') ||
+      desc.includes('disney') || desc.includes('amazon prime') || desc.includes('hbo') ||
+      desc.includes('theater') || desc.includes('movie') || desc.includes('concert') ||
+      desc.includes('game') || desc.includes('entertainment')) {
+    return 'Entertainment'
+  }
+  if (desc.includes('amazon') || desc.includes('target') || desc.includes('walmart') ||
+      desc.includes('best buy') || desc.includes('nike') || desc.includes('apple store') ||
+      desc.includes('shopping') || desc.includes('purchase')) {
+    return 'Shopping'
+  }
+  if (desc.includes('pharmacy') || desc.includes('cvs') || desc.includes('walgreens') ||
+      desc.includes('doctor') || desc.includes('medical') || desc.includes('dental') ||
+      desc.includes('health') || desc.includes('gym') || desc.includes('fitness')) {
+    return 'Health'
+  }
+  if (desc.includes('insurance') || desc.includes('geico') || desc.includes('state farm') ||
+      desc.includes('allstate') || desc.includes('progressive')) {
+    return 'Insurance'
+  }
+  if (desc.includes('transfer') || desc.includes('zelle') || desc.includes('venmo') ||
+      desc.includes('paypal') || desc.includes('wire')) {
+    return 'Transfer'
   }
   
-  const transactions: Transaction[] = []
-  const now = new Date()
-  
-  for (let i = 0; i < count; i++) {
-    const isIncome = Math.random() < 0.15 // 15% chance of income
-    const category = isIncome ? 'Income' : categories[Math.floor(Math.random() * (categories.length - 2))]
-    const merchantList = merchants[category] || ['Unknown']
-    const merchant = merchantList[Math.floor(Math.random() * merchantList.length)]
+  return 'Other'
+}
+
+// Parse CSV file content to extract real transactions
+const parseCSVFile = (fileContent: string, fileName: string): Transaction[] => {
+  try {
+    const lines = fileContent.trim().split('\n')
+    const headers = lines[0].toLowerCase().split(',').map(h => h.trim())
     
-    // Generate date within last 90 days
-    const daysAgo = Math.floor(Math.random() * 90)
-    const date = new Date(now)
-    date.setDate(date.getDate() - daysAgo)
+    const transactions: Transaction[] = []
     
-    // Generate amount based on category
-    let amount: number
-    if (isIncome) {
-      amount = Math.floor(Math.random() * 3000) + 2000 // $2000-$5000 income
-    } else if (category === 'Bills & Utilities') {
-      amount = Math.floor(Math.random() * 150) + 50 // $50-$200
-    } else if (category === 'Food & Dining') {
-      amount = Math.floor(Math.random() * 80) + 10 // $10-$90
-    } else if (category === 'Transportation') {
-      amount = Math.floor(Math.random() * 100) + 20 // $20-$120
-    } else if (category === 'Shopping') {
-      amount = Math.floor(Math.random() * 200) + 20 // $20-$220
-    } else {
-      amount = Math.floor(Math.random() * 100) + 15 // $15-$115
+    for (let i = 1; i < lines.length; i++) {
+      const values = lines[i].split(',').map(v => v.trim())
+      if (values.length < 3) continue
+      
+      // Find column indices (flexible for different CSV formats)
+      const dateIdx = headers.findIndex(h => h.includes('date'))
+      const descIdx = headers.findIndex(h => h.includes('description') || h.includes('desc') || h.includes('merchant') || h.includes('name'))
+      const amountIdx = headers.findIndex(h => h.includes('amount'))
+      const categoryIdx = headers.findIndex(h => h.includes('category') || h.includes('type'))
+      
+      // Default indices if not found
+      const date = dateIdx >= 0 ? values[dateIdx] : values[0]
+      const description = descIdx >= 0 ? values[descIdx] : values[1]
+      const amountStr = amountIdx >= 0 ? values[amountIdx] : values[3] || values[2]
+      const categoryRaw = categoryIdx >= 0 ? values[categoryIdx] : ''
+      
+      // Parse amount
+      const amount = parseFloat(amountStr?.replace(/[$,]/g, '') || '0')
+      if (isNaN(amount) || amount === 0) continue
+      
+      // Skip opening/closing balance rows
+      if (description?.toLowerCase().includes('opening balance')) continue
+      if (description?.toLowerCase().includes('closing balance')) continue
+      
+      // Determine if income or expense
+      const isIncome = amount > 0 || description?.toLowerCase().includes('deposit') || 
+                      description?.toLowerCase().includes('income') || 
+                      description?.toLowerCase().includes('salary') ||
+                      description?.toLowerCase().includes('refund')
+      
+      // Auto-categorize if no category provided
+      const category = categoryRaw || categorizeTransaction(description)
+      
+      transactions.push({
+        id: `${fileName}-${i}-${Date.now()}`,
+        date: formatDateString(date),
+        description: description || 'Unknown',
+        amount: amount,
+        type: isIncome ? 'income' : 'expense',
+        category: category || (isIncome ? 'Income' : 'Other'),
+        source: fileName
+      })
     }
     
-    transactions.push({
-      id: `${fileName}-${i}-${Date.now()}`,
-      date: date.toISOString(),
-      description: merchant,
-      amount: isIncome ? amount : -amount,
-      type: isIncome ? 'income' : 'expense',
-      category,
-      source: fileName
-    })
+    return transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  } catch (err) {
+    console.error('Error parsing CSV:', err)
+    return []
   }
-  
-  return transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 }
 
 // Local storage key for backward compatibility
@@ -128,10 +212,10 @@ const STORAGE_KEY = 'cfosync_uploaded_statements'
 export default function UploadStatements() {
   const [files, setFiles] = useState<UploadedFile[]>([])
   const [uploadHistory, setUploadHistory] = useState<UploadedFile[]>([])
-  const [isLoadingHistory, setIsLoadingHistory] = useState(true)
+  const [, setIsLoadingHistory] = useState(true)
   
   // Use the global store
-  const { addStatement, addTransactions, statements, transactions } = useStatementsStore()
+  const { addStatement, addTransactions } = useStatementsStore()
 
   // Load upload history from Firebase on mount
   useEffect(() => {
@@ -191,20 +275,15 @@ export default function UploadStatements() {
 
   // Save to both Firebase and localStorage
   const saveToHistory = async (completedFile: UploadedFile, generatedTransactions: Transaction[]) => {
-    // Check if file already exists
-    const alreadyExists = uploadHistory.some(f => f.id === completedFile.id || f.name === completedFile.name)
+    // Check if file already exists in history (by name to prevent duplicates)
+    const alreadyExists = uploadHistory.some(f => f.name === completedFile.name)
     if (alreadyExists) {
-      return
+      console.log(`Statement '${completedFile.name}' already exists, skipping duplicate save`)
+      toast.error(`Statement '${completedFile.name}' already uploaded`)
+      return false
     }
     
-    // Update local state immediately
-    setUploadHistory(prev => {
-      const updated = [completedFile, ...prev].slice(0, 20)
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
-      return updated
-    })
-    
-    // Save to Firebase in background
+    // Save to Firebase first to check server-side duplicate
     try {
       const statementData = {
         name: completedFile.name,
@@ -221,11 +300,40 @@ export default function UploadStatements() {
         }))
       }
       
-      await statementsAPI.uploadStatement(statementData)
+      const response = await statementsAPI.uploadStatement(statementData)
+      
+      // Check if backend detected duplicate
+      if (response.duplicate) {
+        console.log(`Server detected duplicate: ${completedFile.name}`)
+        toast.error(`Statement '${completedFile.name}' already exists`)
+        return false
+      }
+      
+      // Update local state only after successful Firebase save
+      setUploadHistory(prev => {
+        // Double-check to prevent race conditions
+        if (prev.some(f => f.name === completedFile.name)) {
+          return prev
+        }
+        const updated = [completedFile, ...prev].slice(0, 20)
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+        return updated
+      })
+      
       console.log('Statement saved to Firebase successfully')
+      return true
     } catch (error) {
       console.error('Failed to save to Firebase:', error)
-      // Data is still in localStorage, so user won't lose it
+      // Still update local state as fallback
+      setUploadHistory(prev => {
+        if (prev.some(f => f.name === completedFile.name)) {
+          return prev
+        }
+        const updated = [completedFile, ...prev].slice(0, 20)
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+        return updated
+      })
+      return true
     }
   }
 
@@ -249,7 +357,21 @@ export default function UploadStatements() {
   }
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
-    const newFiles: UploadedFile[] = acceptedFiles.map(file => ({
+    // Filter out files that already exist in history
+    const uniqueFiles = acceptedFiles.filter(file => {
+      const alreadyInHistory = uploadHistory.some(h => h.name === file.name)
+      if (alreadyInHistory) {
+        toast.error(`"${file.name}" already uploaded`)
+        return false
+      }
+      return true
+    })
+
+    if (uniqueFiles.length === 0) {
+      return
+    }
+
+    const newFiles: UploadedFile[] = uniqueFiles.map(file => ({
       id: Math.random().toString(36).substr(2, 9),
       name: file.name,
       size: file.size,
@@ -261,13 +383,13 @@ export default function UploadStatements() {
 
     setFiles(prev => [...prev, ...newFiles])
 
-    // Simulate upload and processing for each file
-    newFiles.forEach(file => {
-      simulateUploadAndProcess(file.id, file.name)
+    // Process each file - pass the actual File object to read content
+    uniqueFiles.forEach((file, index) => {
+      processUploadedFile(newFiles[index].id, file)
     })
-  }, [])
+  }, [uploadHistory])
 
-  const simulateUploadAndProcess = async (fileId: string, fileName: string) => {
+  const processUploadedFile = async (fileId: string, file: File) => {
     // Simulate upload progress
     for (let i = 0; i <= 100; i += 10) {
       await new Promise(resolve => setTimeout(resolve, 100))
@@ -281,35 +403,48 @@ export default function UploadStatements() {
       f.id === fileId ? { ...f, status: 'processing', progress: 100 } : f
     ))
 
-    // Simulate AI processing
-    await new Promise(resolve => setTimeout(resolve, 2000))
-
-    // Generate realistic transactions
-    const transactionCount = Math.floor(Math.random() * 50) + 20
-    const generatedTransactions = generateTransactions(fileName, transactionCount)
+    // Read actual file content
+    let parsedTransactions: Transaction[] = []
     
-    // Calculate totals from generated transactions
-    const totalIncome = generatedTransactions
+    try {
+      const fileContent = await readFileContent(file)
+      parsedTransactions = parseCSVFile(fileContent, file.name)
+      console.log(`Parsed ${parsedTransactions.length} real transactions from ${file.name}`)
+    } catch (err) {
+      console.error(`Failed to parse ${file.name}:`, err)
+    }
+    
+    // Calculate totals from parsed transactions
+    const totalIncome = parsedTransactions
       .filter(t => t.type === 'income')
-      .reduce((sum, t) => sum + t.amount, 0)
-    const totalExpenses = generatedTransactions
+      .reduce((sum, t) => sum + Math.abs(t.amount), 0)
+    const totalExpenses = parsedTransactions
       .filter(t => t.type === 'expense')
       .reduce((sum, t) => sum + Math.abs(t.amount), 0)
     
     // Get unique categories
-    const categories = [...new Set(generatedTransactions.map(t => t.category))]
+    const categories = [...new Set(parsedTransactions.map(t => t.category))]
+    
+    // Determine date range from transactions
+    let dateRange = 'No transactions'
+    if (parsedTransactions.length > 0) {
+      const dates = parsedTransactions.map(t => new Date(t.date).getTime())
+      const minDate = new Date(Math.min(...dates))
+      const maxDate = new Date(Math.max(...dates))
+      dateRange = `${minDate.toLocaleDateString()} - ${maxDate.toLocaleDateString()}`
+    }
 
     // Generate extracted data summary
     const extractedData = {
-      transactions: transactionCount,
-      dateRange: 'Last 90 days',
+      transactions: parsedTransactions.length,
+      dateRange,
       totalIncome,
       totalExpenses,
       categories
     }
     
     // Add transactions to global store
-    addTransactions(generatedTransactions)
+    addTransactions(parsedTransactions)
 
     // Update file status to completed
     setFiles(prev => {
@@ -324,8 +459,13 @@ export default function UploadStatements() {
       // Get the completed file and save to history + global store + Firebase
       const completedFile = updatedFiles.find(f => f.id === fileId)
       if (completedFile) {
-        saveToHistory(completedFile, generatedTransactions)
-        addStatement(completedFile as any)
+        // Save to history - this will check for duplicates
+        saveToHistory(completedFile, parsedTransactions).then((saved) => {
+          if (saved) {
+            addStatement(completedFile as any)
+            toast.success(`Extracted ${parsedTransactions.length} transactions from ${file.name}`)
+          }
+        })
       }
       
       // Remove from current files list after a short delay (so user sees the completion)
@@ -335,8 +475,16 @@ export default function UploadStatements() {
       
       return updatedFiles
     })
-
-    toast.success(`Extracted ${transactionCount} transactions from ${fileName}`)
+  }
+  
+  // Helper to read file content
+  const readFileContent = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = (e) => resolve(e.target?.result as string)
+      reader.onerror = reject
+      reader.readAsText(file)
+    })
   }
 
   const removeFile = (fileId: string) => {

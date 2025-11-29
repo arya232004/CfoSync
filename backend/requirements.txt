@@ -10,3 +10,11 @@ google-generativeai
 
 # HTTP client for external calls
 httpx
+
+# Firebase
+firebase-admin
+
+# Investment data
+yfinance
+pandas
+numpy

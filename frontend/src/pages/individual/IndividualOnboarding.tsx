@@ -203,55 +203,190 @@ export default function IndividualOnboarding() {
     }
   }
 
-  // Generate realistic transactions for uploaded statements
-  const generateTransactionsForFile = (fileName: string, count: number) => {
-    const categories = ['Food & Dining', 'Shopping', 'Bills & Utilities', 'Transportation', 'Entertainment', 'Healthcare', 'Income', 'Transfer']
-    const merchants: Record<string, string[]> = {
-      'Food & Dining': ['Starbucks', 'McDonald\'s', 'Uber Eats', 'DoorDash', 'Whole Foods', 'Trader Joe\'s', 'Chipotle'],
-      'Shopping': ['Amazon', 'Target', 'Walmart', 'Best Buy', 'Nike', 'Apple Store', 'IKEA'],
-      'Bills & Utilities': ['Electric Company', 'Water Utility', 'Internet Provider', 'Phone Bill', 'Netflix', 'Spotify'],
-      'Transportation': ['Shell Gas', 'Uber', 'Lyft', 'Parking', 'Metro Card', 'Car Insurance'],
-      'Entertainment': ['AMC Theaters', 'Concert Tickets', 'Steam Games', 'Gym Membership', 'Disney+'],
-      'Healthcare': ['CVS Pharmacy', 'Doctor Visit', 'Dental Care', 'Vision Center'],
-      'Income': ['Salary Deposit', 'Direct Deposit', 'Freelance Payment', 'Refund', 'Cash Back'],
-      'Transfer': ['Bank Transfer', 'Zelle', 'Venmo', 'PayPal']
-    }
-    
-    const transactions = []
-    const now = new Date()
-    
-    for (let i = 0; i < count; i++) {
-      const isIncome = Math.random() < 0.15
-      const category = isIncome ? 'Income' : categories[Math.floor(Math.random() * (categories.length - 2))]
-      const merchantList = merchants[category] || ['Unknown']
-      const merchant = merchantList[Math.floor(Math.random() * merchantList.length)]
-      
-      const daysAgo = Math.floor(Math.random() * 90)
-      const date = new Date(now)
-      date.setDate(date.getDate() - daysAgo)
-      
-      let amount: number
-      if (isIncome) {
-        amount = Math.floor(Math.random() * 3000) + 2000
-      } else if (category === 'Bills & Utilities') {
-        amount = Math.floor(Math.random() * 150) + 50
-      } else if (category === 'Food & Dining') {
-        amount = Math.floor(Math.random() * 80) + 10
-      } else {
-        amount = Math.floor(Math.random() * 150) + 20
+  // Parse CSV file content to extract real transactions
+  const parseCSVFile = async (file: File): Promise<any[]> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        try {
+          const text = e.target?.result as string
+          const lines = text.trim().split('\n')
+          const headers = lines[0].toLowerCase().split(',').map(h => h.trim())
+          
+          const transactions: any[] = []
+          
+          for (let i = 1; i < lines.length; i++) {
+            const values = lines[i].split(',').map(v => v.trim())
+            if (values.length < 3) continue
+            
+            // Find column indices (flexible for different CSV formats)
+            const dateIdx = headers.findIndex(h => h.includes('date'))
+            const descIdx = headers.findIndex(h => h.includes('description') || h.includes('desc') || h.includes('merchant') || h.includes('name'))
+            const amountIdx = headers.findIndex(h => h.includes('amount'))
+            const categoryIdx = headers.findIndex(h => h.includes('category') || h.includes('type'))
+            
+            // Default indices if not found
+            const date = dateIdx >= 0 ? values[dateIdx] : values[0]
+            const description = descIdx >= 0 ? values[descIdx] : values[1]
+            const amountStr = amountIdx >= 0 ? values[amountIdx] : values[3] || values[2]
+            const categoryRaw = categoryIdx >= 0 ? values[categoryIdx] : ''
+            
+            // Parse amount - handle various formats
+            const amount = parseFloat(amountStr?.replace(/[$,]/g, '') || '0')
+            if (isNaN(amount) || amount === 0) continue
+            
+            // Skip opening balance or header-like rows
+            if (description?.toLowerCase().includes('opening balance')) continue
+            if (description?.toLowerCase().includes('closing balance')) continue
+            
+            // Determine if income or expense and categorize
+            const isIncome = amount > 0 || description?.toLowerCase().includes('deposit') || 
+                            description?.toLowerCase().includes('income') || 
+                            description?.toLowerCase().includes('salary') ||
+                            description?.toLowerCase().includes('refund')
+            
+            // Auto-categorize based on description if no category provided
+            let category = categoryRaw || categorizeTransaction(description)
+            
+            transactions.push({
+              date: formatDateString(date),
+              description: description || 'Unknown',
+              amount: amount,
+              type: isIncome ? 'income' : 'expense',
+              category: category || (isIncome ? 'Income' : 'Other'),
+              source: file.name
+            })
+          }
+          
+          resolve(transactions)
+        } catch (err) {
+          console.error('Error parsing CSV:', err)
+          reject(err)
+        }
       }
-      
-      transactions.push({
-        date: date.toISOString(),
-        description: merchant,
-        amount: isIncome ? amount : -amount,
-        type: (isIncome ? 'income' : 'expense') as 'income' | 'expense',
-        category,
-        source: fileName
-      })
+      reader.onerror = reject
+      reader.readAsText(file)
+    })
+  }
+
+  // Helper to format date strings
+  const formatDateString = (dateStr: string): string => {
+    try {
+      // Handle various date formats
+      const date = new Date(dateStr)
+      if (!isNaN(date.getTime())) {
+        return date.toISOString()
+      }
+      // Try MM/DD/YYYY format
+      const parts = dateStr.split(/[\/\-]/)
+      if (parts.length === 3) {
+        const [a, b, c] = parts
+        // Try different interpretations
+        if (parseInt(a) > 12) {
+          // YYYY-MM-DD
+          return new Date(parseInt(a), parseInt(b) - 1, parseInt(c)).toISOString()
+        } else {
+          // MM/DD/YYYY or MM-DD-YYYY
+          return new Date(parseInt(c), parseInt(a) - 1, parseInt(b)).toISOString()
+        }
+      }
+      return new Date().toISOString()
+    } catch {
+      return new Date().toISOString()
+    }
+  }
+
+  // Auto-categorize transaction based on description
+  const categorizeTransaction = (description: string): string => {
+    const desc = description?.toLowerCase() || ''
+    
+    // Income patterns
+    if (desc.includes('deposit') || desc.includes('payroll') || desc.includes('salary') || 
+        desc.includes('direct dep') || desc.includes('income')) {
+      return 'Income'
     }
     
-    return transactions
+    // Housing
+    if (desc.includes('rent') || desc.includes('mortgage') || desc.includes('apartment') ||
+        desc.includes('housing') || desc.includes('hoa')) {
+      return 'Housing'
+    }
+    
+    // Groceries
+    if (desc.includes('whole foods') || desc.includes('trader joe') || desc.includes('costco') ||
+        desc.includes('grocery') || desc.includes('safeway') || desc.includes('kroger') ||
+        desc.includes('aldi') || desc.includes('wegmans') || desc.includes('publix')) {
+      return 'Groceries'
+    }
+    
+    // Dining
+    if (desc.includes('starbucks') || desc.includes('mcdonald') || desc.includes('chipotle') ||
+        desc.includes('restaurant') || desc.includes('doordash') || desc.includes('uber eats') ||
+        desc.includes('grubhub') || desc.includes('dining') || desc.includes('cafe') ||
+        desc.includes('coffee') || desc.includes('pizza')) {
+      return 'Dining'
+    }
+    
+    // Transportation
+    if (desc.includes('uber') || desc.includes('lyft') || desc.includes('gas') ||
+        desc.includes('shell') || desc.includes('chevron') || desc.includes('exxon') ||
+        desc.includes('parking') || desc.includes('metro') || desc.includes('transit') ||
+        desc.includes('car') || desc.includes('auto')) {
+      return 'Transportation'
+    }
+    
+    // Utilities
+    if (desc.includes('electric') || desc.includes('water') || desc.includes('gas bill') ||
+        desc.includes('utility') || desc.includes('comcast') || desc.includes('verizon') ||
+        desc.includes('at&t') || desc.includes('internet') || desc.includes('phone bill')) {
+      return 'Utilities'
+    }
+    
+    // Entertainment
+    if (desc.includes('netflix') || desc.includes('spotify') || desc.includes('hulu') ||
+        desc.includes('disney') || desc.includes('amazon prime') || desc.includes('hbo') ||
+        desc.includes('theater') || desc.includes('movie') || desc.includes('concert') ||
+        desc.includes('game') || desc.includes('entertainment')) {
+      return 'Entertainment'
+    }
+    
+    // Shopping
+    if (desc.includes('amazon') || desc.includes('target') || desc.includes('walmart') ||
+        desc.includes('best buy') || desc.includes('nike') || desc.includes('apple store') ||
+        desc.includes('shopping') || desc.includes('purchase')) {
+      return 'Shopping'
+    }
+    
+    // Health
+    if (desc.includes('pharmacy') || desc.includes('cvs') || desc.includes('walgreens') ||
+        desc.includes('doctor') || desc.includes('medical') || desc.includes('dental') ||
+        desc.includes('health') || desc.includes('gym') || desc.includes('fitness')) {
+      return 'Health'
+    }
+    
+    // Insurance
+    if (desc.includes('insurance') || desc.includes('geico') || desc.includes('state farm') ||
+        desc.includes('allstate') || desc.includes('progressive')) {
+      return 'Insurance'
+    }
+    
+    // Transfer
+    if (desc.includes('transfer') || desc.includes('zelle') || desc.includes('venmo') ||
+        desc.includes('paypal') || desc.includes('wire')) {
+      return 'Transfer'
+    }
+    
+    return 'Other'
+  }
+
+  // Define transaction type
+  interface ParsedTransaction {
+    date: string
+    description: string
+    amount: number
+    type: 'income' | 'expense'
+    category: string
+    source: string
   }
 
   const handleSubmit = async () => {
@@ -267,17 +402,35 @@ export default function IndividualOnboarding() {
         
         for (let index = 0; index < data.statements.length; index++) {
           const file = data.statements[index]
-          const transactionCount = Math.floor(Math.random() * 50) + 20
-          const generatedTransactions = generateTransactionsForFile(file.name, transactionCount)
           
-          // Calculate totals
-          const totalIncome = generatedTransactions
-            .filter(t => t.type === 'income')
-            .reduce((sum, t) => sum + t.amount, 0)
-          const totalExpenses = generatedTransactions
-            .filter(t => t.type === 'expense')
-            .reduce((sum, t) => sum + Math.abs(t.amount), 0)
-          const categories = [...new Set(generatedTransactions.map(t => t.category))]
+          // Parse actual CSV content instead of generating mock data
+          let parsedTransactions: ParsedTransaction[] = []
+          try {
+            parsedTransactions = await parseCSVFile(file) as ParsedTransaction[]
+            console.log(`Parsed ${parsedTransactions.length} transactions from ${file.name}`)
+          } catch (err) {
+            console.error(`Failed to parse ${file.name}:`, err)
+            // If parsing fails, create empty array
+            parsedTransactions = []
+          }
+          
+          // Calculate totals from actual parsed data
+          const totalIncome = parsedTransactions
+            .filter((t: ParsedTransaction) => t.type === 'income')
+            .reduce((sum: number, t: ParsedTransaction) => sum + Math.abs(t.amount), 0)
+          const totalExpenses = parsedTransactions
+            .filter((t: ParsedTransaction) => t.type === 'expense')
+            .reduce((sum: number, t: ParsedTransaction) => sum + Math.abs(t.amount), 0)
+          const categories: string[] = [...new Set(parsedTransactions.map((t: ParsedTransaction) => t.category))]
+          
+          // Determine date range from transactions
+          let dateRange = 'No transactions'
+          if (parsedTransactions.length > 0) {
+            const dates = parsedTransactions.map((t: ParsedTransaction) => new Date(t.date).getTime())
+            const minDate = new Date(Math.min(...dates))
+            const maxDate = new Date(Math.max(...dates))
+            dateRange = `${minDate.toLocaleDateString()} - ${maxDate.toLocaleDateString()}`
+          }
           
           const statementData = {
             id: `onboarding-${Date.now()}-${index}`,
@@ -288,8 +441,8 @@ export default function IndividualOnboarding() {
             progress: 100,
             uploadedAt: new Date().toISOString(),
             extractedData: {
-              transactions: transactionCount,
-              dateRange: 'Onboarding Upload',
+              transactions: parsedTransactions.length,
+              dateRange,
               totalIncome,
               totalExpenses,
               categories
@@ -306,9 +459,9 @@ export default function IndividualOnboarding() {
               size: file.size,
               file_type: file.type,
               extracted_data: statementData.extractedData,
-              transactions: generatedTransactions
+              transactions: parsedTransactions
             })
-            console.log(`Statement ${file.name} saved to Firebase`)
+            console.log(`Statement ${file.name} saved to Firebase with ${parsedTransactions.length} real transactions`)
           } catch (error) {
             console.error('Failed to save to Firebase:', error)
             // Continue anyway, data is saved to localStorage

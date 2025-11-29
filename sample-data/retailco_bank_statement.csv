@@ -1,0 +1,39 @@
+Date,Description,Debit,Credit,Balance,Category
+2025-01-02,Opening Balance,,,520000,
+2025-01-03,POS Sales - Store A,,28500,548500,Sales
+2025-01-04,POS Sales - Store B,,22300,570800,Sales
+2025-01-05,Online Sales - Shopify,,15200,586000,Sales
+2025-01-06,Supplier - Fashion Wholesale,45000,,541000,Inventory
+2025-01-08,Payroll - Week 1,35000,,506000,Payroll
+2025-01-10,POS Sales - Store A,,31200,537200,Sales
+2025-01-11,POS Sales - Store B,,24800,562000,Sales
+2025-01-12,Marketing - Instagram Ads,8500,,553500,Marketing
+2025-01-14,Rent - Store A,12500,,541000,Rent
+2025-01-15,Rent - Store B,12500,,528500,Rent
+2025-01-16,Payroll - Week 2,35000,,493500,Payroll
+2025-01-18,POS Sales - Store A,,35600,529100,Sales
+2025-01-19,POS Sales - Store B,,28900,558000,Sales
+2025-01-20,Online Sales - Shopify,,18500,576500,Sales
+2025-01-22,Supplier - Accessories Inc,18000,,558500,Inventory
+2025-01-24,Payroll - Week 3,35000,,523500,Payroll
+2025-01-25,Utilities - Store A,2200,,521300,Utilities
+2025-01-26,Utilities - Store B,2100,,519200,Utilities
+2025-01-28,POS Sales - Store A,,42100,561300,Sales
+2025-01-29,POS Sales - Store B,,33500,594800,Sales
+2025-01-30,Shipping - UPS,4500,,590300,Shipping
+2025-01-31,Payroll - Week 4,35000,,555300,Payroll
+2025-02-01,Online Sales - Shopify,,22000,577300,Sales
+2025-02-03,POS Sales - Store A,,29800,607100,Sales
+2025-02-04,POS Sales - Store B,,25100,632200,Sales
+2025-02-05,Supplier - Fashion Wholesale,52000,,580200,Inventory
+2025-02-07,Payroll - Week 1,36000,,544200,Payroll
+2025-02-10,POS Sales - Store A,,33400,577600,Sales
+2025-02-11,Marketing - Google Ads,6200,,571400,Marketing
+2025-02-12,Insurance Premium,9500,,561900,Insurance
+2025-02-14,Valentine Sale Revenue,,48000,609900,Sales
+2025-02-15,Payroll - Week 2,36000,,573900,Payroll
+2025-02-18,POS Sales - Store A,,31200,605100,Sales
+2025-02-20,Supplier - Seasonal Items,28000,,577100,Inventory
+2025-02-22,Payroll - Week 3,36000,,541100,Payroll
+2025-02-25,Online Sales - Shopify,,25500,566600,Sales
+2025-02-28,Payroll - Week 4,36000,,530600,Payroll

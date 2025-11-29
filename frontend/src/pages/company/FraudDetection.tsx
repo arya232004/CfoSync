@@ -1,8 +1,25 @@
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import aiService from '../../services/aiService';
-
-const { company: companyAI } = aiService;
+import { motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
+import {
+  Shield,
+  AlertTriangle,
+  RefreshCw,
+  Loader2,
+  Plus,
+  Brain,
+  CheckCircle,
+  XCircle,
+  Eye,
+  Activity,
+  Lock,
+  Search,
+  Clock
+} from 'lucide-react';
+import { useAuthStore } from '../../lib/auth';
+import { useSettingsStore, formatCurrency } from '../../lib/store';
+import api from '../../lib/api';
+import toast from 'react-hot-toast';
 
 interface FraudAlert {
   id: string;
@@ -20,156 +37,117 @@ interface SecurityMetric {
   label: string;
   value: number | string;
   status: 'good' | 'warning' | 'critical';
-  trend?: string;
 }
 
 const FraudDetection = () => {
-  const [aiLoading, setAiLoading] = useState({
-    scan: false,
-    analysis: false,
-    realtime: false,
-  });
+  const { user } = useAuthStore();
+  const { currency } = useSettingsStore();
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [hasData, setHasData] = useState(false);
+  
+  // Data states
   const [alerts, setAlerts] = useState<FraudAlert[]>([]);
-  const [lastScanTime, setLastScanTime] = useState<string>('2 minutes ago');
-  const [riskScore, setRiskScore] = useState(24);
+  const [riskScore, setRiskScore] = useState(0);
   const [realtimeProtection, setRealtimeProtection] = useState(true);
-
-  const securityMetrics: SecurityMetric[] = [
-    { label: 'Risk Score', value: riskScore, status: riskScore > 50 ? 'critical' : riskScore > 30 ? 'warning' : 'good' },
-    { label: 'Transactions Scanned', value: '12,847', status: 'good' },
-    { label: 'Anomalies Detected', value: 5, status: 'warning' },
-    { label: 'False Positive Rate', value: '2.3%', status: 'good' },
-  ];
-
-  const initialAlerts: FraudAlert[] = [
-    {
-      id: '1',
-      severity: 'high',
-      type: 'Unusual Transfer',
-      description: 'Large wire transfer to new vendor (VendorCorp LLC) not in approved vendor list',
-      amount: 45000,
-      timestamp: '2024-01-15 14:32',
-      status: 'pending',
-      aiConfidence: 89,
-      suggestedAction: 'Verify vendor legitimacy and approval before processing',
-    },
-    {
-      id: '2',
-      severity: 'medium',
-      type: 'Access Anomaly',
-      description: 'Finance portal accessed from unusual location (Prague, CZ)',
-      amount: 0,
-      timestamp: '2024-01-15 11:18',
-      status: 'investigating',
-      aiConfidence: 76,
-      suggestedAction: 'Confirm with user and consider enforcing geo-restrictions',
-    },
-    {
-      id: '3',
-      severity: 'critical',
-      type: 'Duplicate Invoice',
-      description: 'Potential duplicate payment: Invoice #INV-2024-0892 matches pattern of #INV-2024-0845',
-      amount: 8200,
-      timestamp: '2024-01-14 16:45',
-      status: 'pending',
-      aiConfidence: 94,
-      suggestedAction: 'Hold payment and verify with accounts payable',
-    },
-    {
-      id: '4',
-      severity: 'low',
-      type: 'Off-hours Activity',
-      description: 'Expense report submitted at 3:42 AM local time',
-      amount: 1250,
-      timestamp: '2024-01-14 03:42',
-      status: 'dismissed',
-      aiConfidence: 45,
-      suggestedAction: 'Likely legitimate - employee may be traveling',
-    },
-    {
-      id: '5',
-      severity: 'medium',
-      type: 'Vendor Pattern',
-      description: 'Increased payment frequency to vendor (CloudServices Inc) - up 300% MoM',
-      amount: 24500,
-      timestamp: '2024-01-13 09:15',
-      status: 'resolved',
-      aiConfidence: 68,
-      suggestedAction: 'Review contract terms and service usage',
-    },
-  ];
+  const [metrics, setMetrics] = useState<SecurityMetric[]>([]);
+  const [lastScanTime, setLastScanTime] = useState('Never');
 
   useEffect(() => {
-    setAlerts(initialAlerts);
-    runInitialScan();
+    loadComplianceData();
   }, []);
 
-  const runInitialScan = async () => {
-    setAiLoading(prev => ({ ...prev, analysis: true }));
+  const loadComplianceData = async () => {
+    setLoading(true);
     try {
-      await companyAI.detectAnomalies('company-1', []);
+      const response = await api.post('/api/agents/compliance', {
+        company_id: user?.id
+      });
+
+      const data = response.data;
+      setHasData(data.hasData);
+
+      if (data.hasData) {
+        // Set alerts
+        setAlerts(data.alerts || []);
+        
+        // Set risk score
+        setRiskScore(data.riskScore || 0);
+        
+        // Set metrics
+        setMetrics(data.metrics || []);
+        
+        // Set last scan time
+        setLastScanTime(data.lastScan || 'Just now');
+      }
     } catch (error) {
-      console.error('Initial scan error:', error);
+      console.error('Error loading compliance data:', error);
+      toast.error('Failed to load fraud detection data');
+    } finally {
+      setLoading(false);
     }
-    setAiLoading(prev => ({ ...prev, analysis: false }));
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadComplianceData();
+    setRefreshing(false);
+    toast.success('Fraud detection data refreshed');
   };
 
   const handleFullScan = async () => {
-    setAiLoading(prev => ({ ...prev, scan: true }));
+    setScanning(true);
     try {
-      const results = await companyAI.detectAnomalies('company-1', []);
-      
-      // Add new alert from scan
-      const newAlert: FraudAlert = {
-        id: `scan-${Date.now()}`,
-        severity: 'medium',
-        type: 'Pattern Analysis Complete',
-        description: 'Full transaction scan completed. 2 new anomalies identified for review.',
-        amount: 0,
-        timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
-        status: 'pending',
-        aiConfidence: 85,
-        suggestedAction: 'Review flagged transactions in detail',
-      };
-      
-      setAlerts(prev => [newAlert, ...prev]);
+      const response = await api.post('/api/agents/compliance', {
+        company_id: user?.id,
+        full_scan: true
+      });
+
+      const data = response.data;
+      setAlerts(data.alerts || []);
+      setRiskScore(data.riskScore || 0);
       setLastScanTime('Just now');
       
-      // Update risk score based on results
-      if (results && results.length > 0) {
-        setRiskScore(prev => Math.min(100, prev + 5));
-      }
+      toast.success('Full security scan completed');
     } catch (error) {
-      console.error('Full scan error:', error);
+      console.error('Scan error:', error);
+      toast.error('Security scan failed');
+    } finally {
+      setScanning(false);
     }
-    setAiLoading(prev => ({ ...prev, scan: false }));
   };
 
-  const handleAlertAction = (alertId: string, action: 'resolve' | 'dismiss' | 'investigate') => {
-    setAlerts(prev => prev.map(alert => {
-      if (alert.id === alertId) {
-        return {
-          ...alert,
-          status: action === 'resolve' ? 'resolved' : action === 'dismiss' ? 'dismissed' : 'investigating',
-        };
+  const handleAlertAction = async (alertId: string, action: 'resolve' | 'dismiss' | 'investigate') => {
+    try {
+      await api.post('/api/agents/compliance/update-alert', {
+        company_id: user?.id,
+        alert_id: alertId,
+        status: action === 'resolve' ? 'resolved' : action === 'dismiss' ? 'dismissed' : 'investigating'
+      });
+
+      setAlerts(prev => prev.map(alert => {
+        if (alert.id === alertId) {
+          return {
+            ...alert,
+            status: action === 'resolve' ? 'resolved' : action === 'dismiss' ? 'dismissed' : 'investigating'
+          };
+        }
+        return alert;
+      }));
+
+      // Update risk score when alerts are resolved
+      if (action === 'resolve' || action === 'dismiss') {
+        setRiskScore(prev => Math.max(0, prev - 3));
       }
-      return alert;
-    }));
-    
-    // Update risk score when alerts are resolved
-    if (action === 'resolve' || action === 'dismiss') {
-      setRiskScore(prev => Math.max(0, prev - 3));
+
+      toast.success(`Alert ${action}d successfully`);
+    } catch (error) {
+      toast.error('Failed to update alert');
     }
   };
 
-  const formatCurrency = (amount: number) => {
-    if (amount === 0) return '-';
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-    }).format(amount);
-  };
+  const formatMoney = (amount: number) => formatCurrency(amount, currency);
 
   const getSeverityStyles = (severity: string) => {
     switch (severity) {
@@ -200,133 +178,137 @@ const FraudDetection = () => {
   const pendingAlerts = alerts.filter(a => a.status === 'pending' || a.status === 'investigating');
   const resolvedAlerts = alerts.filter(a => a.status === 'resolved' || a.status === 'dismissed');
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-dark-900 via-dark-800 to-dark-900 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 text-primary-500 animate-spin mx-auto mb-4" />
+          <p className="text-gray-400">Scanning for security threats...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // No Data State
+  if (!hasData) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-dark-900 via-dark-800 to-dark-900 p-6">
+        <div className="max-w-4xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="glass-card p-8 text-center"
+          >
+            <div className="w-20 h-20 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Shield className="w-10 h-10 text-red-400" />
+            </div>
+            <h1 className="text-3xl font-bold text-white mb-4">Fraud Detection & Security</h1>
+            <p className="text-gray-400 mb-8 max-w-lg mx-auto">
+              Add your company transactions to enable AI-powered fraud detection, 
+              anomaly analysis, and real-time security monitoring.
+            </p>
+            <Link
+              to="/company/onboarding"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-500 to-accent-500 rounded-xl font-semibold text-white hover:shadow-glow transition-all"
+            >
+              <Plus className="w-5 h-5" />
+              Add Company Data
+            </Link>
+          </motion.div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="p-6">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-dark-900 via-dark-800 to-dark-900 p-6">
+      <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold text-white mb-2">Fraud Detection</h1>
+            <h1 className="text-3xl font-bold text-white">Fraud Detection</h1>
             <p className="text-gray-400">AI-Powered Security & Anomaly Detection</p>
           </div>
           
           <div className="flex items-center gap-3">
-            <div className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
-              realtimeProtection ? 'bg-green-500/20' : 'bg-red-500/20'
-            }`}>
-              <div className={`w-2 h-2 rounded-full ${
-                realtimeProtection ? 'bg-green-500 animate-pulse' : 'bg-red-500'
-              }`} />
-              <span className={realtimeProtection ? 'text-green-400' : 'text-red-400'}>
-                {realtimeProtection ? 'Real-time Protection Active' : 'Protection Disabled'}
-              </span>
+            <div className="flex items-center gap-2 px-4 py-2 bg-dark-700 rounded-lg">
+              <div className={`w-2 h-2 rounded-full ${realtimeProtection ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+              <span className="text-sm text-gray-300">Real-time Protection</span>
               <button
                 onClick={() => setRealtimeProtection(!realtimeProtection)}
-                className="ml-2 text-xs underline opacity-70 hover:opacity-100"
+                className={`w-10 h-5 rounded-full transition-colors ${
+                  realtimeProtection ? 'bg-green-500' : 'bg-dark-600'
+                }`}
               >
-                {realtimeProtection ? 'Disable' : 'Enable'}
+                <div className={`w-4 h-4 bg-white rounded-full transition-transform ${
+                  realtimeProtection ? 'translate-x-5' : 'translate-x-0.5'
+                }`} />
               </button>
             </div>
-            
             <button
               onClick={handleFullScan}
-              disabled={aiLoading.scan}
-              className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 transition-colors flex items-center gap-2"
+              disabled={scanning}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors flex items-center gap-2"
             >
-              {aiLoading.scan ? (
-                <>
-                  <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
-                  Scanning...
-                </>
+              {scanning ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
-                <>🔍 Full Scan</>
+                <Search className="w-4 h-4" />
               )}
+              Full Scan
+            </button>
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="p-2 glass-card hover:bg-white/10 transition-colors"
+            >
+              <RefreshCw className={`w-5 h-5 text-gray-400 ${refreshing ? 'animate-spin' : ''}`} />
             </button>
           </div>
         </div>
 
-        {/* Risk Score Dashboard */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-gradient-to-r from-dark-800 to-dark-900 rounded-2xl p-6 mb-8 border border-dark-700"
-        >
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-            {/* Large Risk Score */}
-            <div className="md:col-span-1 flex flex-col items-center justify-center">
-              <div className="relative">
-                <svg className="w-32 h-32 transform -rotate-90">
-                  <circle
-                    cx="64"
-                    cy="64"
-                    r="56"
-                    stroke="currentColor"
-                    strokeWidth="8"
-                    fill="none"
-                    className="text-dark-700"
-                  />
-                  <motion.circle
-                    cx="64"
-                    cy="64"
-                    r="56"
-                    stroke="currentColor"
-                    strokeWidth="8"
-                    fill="none"
-                    strokeLinecap="round"
-                    strokeDasharray={`${2 * Math.PI * 56}`}
-                    initial={{ strokeDashoffset: 2 * Math.PI * 56 }}
-                    animate={{ strokeDashoffset: 2 * Math.PI * 56 * (1 - riskScore / 100) }}
-                    transition={{ duration: 1 }}
-                    className={`${
-                      riskScore > 50 ? 'text-red-500' :
-                      riskScore > 30 ? 'text-yellow-500' : 'text-green-500'
-                    }`}
-                  />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="text-center">
-                    <div className={`text-3xl font-bold ${
-                      riskScore > 50 ? 'text-red-400' :
-                      riskScore > 30 ? 'text-yellow-400' : 'text-green-400'
-                    }`}>
-                      {riskScore}
-                    </div>
-                    <div className="text-gray-400 text-xs">Risk Score</div>
-                  </div>
-                </div>
-              </div>
-              <div className={`mt-2 text-sm font-medium ${
-                riskScore > 50 ? 'text-red-400' :
-                riskScore > 30 ? 'text-yellow-400' : 'text-green-400'
-              }`}>
-                {riskScore > 50 ? 'High Risk' : riskScore > 30 ? 'Moderate' : 'Low Risk'}
-              </div>
+        {/* Security Metrics */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="glass-card p-5"
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <Shield className={`w-5 h-5 ${riskScore > 50 ? 'text-red-400' : riskScore > 30 ? 'text-yellow-400' : 'text-green-400'}`} />
+              <span className="text-gray-400 text-sm">Risk Score</span>
             </div>
-
-            {/* Metrics */}
-            {securityMetrics.slice(1).map((metric, index) => (
-              <motion.div
-                key={metric.label}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-                className="bg-dark-700/50 rounded-xl p-4 text-center"
-              >
-                <div className="text-gray-400 text-sm mb-2">{metric.label}</div>
-                <div className={`text-2xl font-bold ${getMetricStatusColor(metric.status)}`}>
-                  {metric.value}
-                </div>
-              </motion.div>
-            ))}
-
-            {/* Last Scan */}
-            <div className="bg-dark-700/50 rounded-xl p-4 text-center">
-              <div className="text-gray-400 text-sm mb-2">Last AI Scan</div>
-              <div className="text-white text-lg font-medium">{lastScanTime}</div>
-              <div className="text-green-400 text-xs mt-1">✓ All systems normal</div>
+            <div className={`text-3xl font-bold ${riskScore > 50 ? 'text-red-400' : riskScore > 30 ? 'text-yellow-400' : 'text-green-400'}`}>
+              {riskScore}
             </div>
-          </div>
-        </motion.div>
+            <div className="mt-2 h-2 bg-dark-700 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${
+                  riskScore > 50 ? 'bg-red-500' : riskScore > 30 ? 'bg-yellow-500' : 'bg-green-500'
+                }`}
+                style={{ width: `${riskScore}%` }}
+              />
+            </div>
+          </motion.div>
+
+          {metrics.map((metric, index) => (
+            <motion.div
+              key={metric.label}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: (index + 1) * 0.1 }}
+              className="glass-card p-5"
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <Activity className="w-5 h-5 text-gray-400" />
+                <span className="text-gray-400 text-sm">{metric.label}</span>
+              </div>
+              <div className={`text-2xl font-bold ${getMetricStatusColor(metric.status)}`}>
+                {metric.value}
+              </div>
+            </motion.div>
+          ))}
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Active Alerts */}
@@ -334,206 +316,209 @@ const FraudDetection = () => {
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-dark-800 rounded-xl p-6 border border-dark-700"
+              className="glass-card p-6"
             >
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                  <span className="text-xl">🚨</span>
+                  <AlertTriangle className="w-5 h-5 text-yellow-400" />
                   <h3 className="text-lg font-semibold text-white">Active Alerts</h3>
-                  <span className="px-2 py-1 bg-yellow-500/20 text-yellow-400 text-xs rounded-full">
-                    {pendingAlerts.length} pending
-                  </span>
+                  {pendingAlerts.length > 0 && (
+                    <span className="px-2 py-1 bg-red-500/20 text-red-400 text-xs rounded-full">
+                      {pendingAlerts.length} pending
+                    </span>
+                  )}
                 </div>
+                <span className="text-gray-400 text-sm flex items-center gap-1">
+                  <Clock className="w-4 h-4" />
+                  Last scan: {lastScanTime}
+                </span>
               </div>
 
-              <AnimatePresence>
-                <div className="space-y-3">
+              {pendingAlerts.length === 0 ? (
+                <div className="text-center py-12">
+                  <CheckCircle className="w-12 h-12 text-green-400 mx-auto mb-3" />
+                  <p className="text-gray-400">No active threats detected</p>
+                  <p className="text-gray-500 text-sm">Your system is secure</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
                   {pendingAlerts.map((alert, index) => (
                     <motion.div
                       key={alert.id}
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: 20 }}
-                      transition={{ delay: index * 0.05 }}
+                      transition={{ delay: index * 0.1 }}
                       className={`p-4 rounded-lg border ${getSeverityStyles(alert.severity)}`}
                     >
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <span className={`px-2 py-0.5 rounded text-xs font-medium uppercase ${
-                            alert.severity === 'critical' ? 'bg-red-500/30' :
-                            alert.severity === 'high' ? 'bg-orange-500/30' :
-                            alert.severity === 'medium' ? 'bg-yellow-500/30' : 'bg-blue-500/30'
-                          }`}>
-                            {alert.severity}
-                          </span>
-                          <span className="text-white font-medium">{alert.type}</span>
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={`px-2 py-1 rounded text-xs font-medium uppercase ${getSeverityStyles(alert.severity)}`}>
+                              {alert.severity}
+                            </span>
+                            <span className="text-white font-medium">{alert.type}</span>
+                          </div>
+                          <p className="text-gray-300 text-sm">{alert.description}</p>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className={`px-2 py-0.5 rounded text-xs ${getStatusStyles(alert.status)}`}>
-                            {alert.status}
-                          </span>
+                        <div className="text-right">
                           {alert.amount > 0 && (
-                            <span className="text-white font-semibold">{formatCurrency(alert.amount)}</span>
+                            <span className="text-white font-semibold">{formatMoney(alert.amount)}</span>
                           )}
+                          <div className="text-gray-500 text-xs mt-1">{alert.timestamp}</div>
                         </div>
                       </div>
-                      
-                      <p className="text-gray-300 text-sm mb-2">{alert.description}</p>
-                      
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4 text-xs text-gray-500">
-                          <span>{alert.timestamp}</span>
-                          <span className="flex items-center gap-1">
-                            🤖 {alert.aiConfidence}% confidence
-                          </span>
+
+                      <div className="flex items-center justify-between pt-3 border-t border-current/20">
+                        <div className="flex items-center gap-2">
+                          <Brain className="w-4 h-4" />
+                          <span className="text-sm">{alert.aiConfidence}% confidence</span>
                         </div>
-                        
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => handleAlertAction(alert.id, 'investigate')}
-                            className="px-3 py-1 bg-blue-500/20 text-blue-400 text-xs rounded hover:bg-blue-500/30 transition-colors"
+                            className="px-3 py-1 bg-blue-500/20 text-blue-400 rounded text-sm hover:bg-blue-500/30 transition-colors flex items-center gap-1"
                           >
+                            <Eye className="w-3 h-3" />
                             Investigate
                           </button>
                           <button
                             onClick={() => handleAlertAction(alert.id, 'resolve')}
-                            className="px-3 py-1 bg-green-500/20 text-green-400 text-xs rounded hover:bg-green-500/30 transition-colors"
+                            className="px-3 py-1 bg-green-500/20 text-green-400 rounded text-sm hover:bg-green-500/30 transition-colors flex items-center gap-1"
                           >
+                            <CheckCircle className="w-3 h-3" />
                             Resolve
                           </button>
                           <button
                             onClick={() => handleAlertAction(alert.id, 'dismiss')}
-                            className="px-3 py-1 bg-gray-500/20 text-gray-400 text-xs rounded hover:bg-gray-500/30 transition-colors"
+                            className="px-3 py-1 bg-gray-500/20 text-gray-400 rounded text-sm hover:bg-gray-500/30 transition-colors flex items-center gap-1"
                           >
+                            <XCircle className="w-3 h-3" />
                             Dismiss
                           </button>
                         </div>
                       </div>
-                      
-                      <div className="mt-3 pt-3 border-t border-white/10">
-                        <div className="flex items-start gap-2 text-sm">
-                          <span className="text-primary-400">AI Suggestion:</span>
-                          <span className="text-gray-400">{alert.suggestedAction}</span>
-                        </div>
+
+                      <div className="mt-3 p-2 bg-dark-800/50 rounded text-sm">
+                        <span className="text-gray-400">💡 Suggested: </span>
+                        <span className="text-gray-300">{alert.suggestedAction}</span>
                       </div>
                     </motion.div>
                   ))}
-                </div>
-              </AnimatePresence>
-
-              {pendingAlerts.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
-                  <div className="text-4xl mb-2">✅</div>
-                  <p>No active alerts. All systems secure.</p>
                 </div>
               )}
             </motion.div>
 
             {/* Resolved Alerts */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="bg-dark-800 rounded-xl p-6 border border-dark-700"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-white">Recent History</h3>
-                <span className="text-gray-400 text-sm">{resolvedAlerts.length} resolved</span>
-              </div>
-
-              <div className="space-y-2">
-                {resolvedAlerts.slice(0, 5).map((alert) => (
-                  <div
-                    key={alert.id}
-                    className="flex items-center justify-between p-3 rounded-lg bg-dark-700/30"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className={`w-2 h-2 rounded-full ${
-                        alert.status === 'resolved' ? 'bg-green-500' : 'bg-gray-500'
-                      }`} />
-                      <span className="text-gray-400">{alert.type}</span>
-                    </div>
-                    <div className="flex items-center gap-4 text-sm">
-                      <span className="text-gray-500">{alert.timestamp}</span>
-                      <span className={getStatusStyles(alert.status) + ' px-2 py-0.5 rounded text-xs'}>
+            {resolvedAlerts.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="glass-card p-6"
+              >
+                <h3 className="text-lg font-semibold text-white mb-4">Resolved Alerts</h3>
+                <div className="space-y-2">
+                  {resolvedAlerts.slice(0, 5).map((alert) => (
+                    <div
+                      key={alert.id}
+                      className="flex items-center justify-between p-3 bg-dark-700/30 rounded-lg"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${getStatusStyles(alert.status)}`}>
+                          {alert.status === 'resolved' ? (
+                            <CheckCircle className="w-4 h-4" />
+                          ) : (
+                            <XCircle className="w-4 h-4" />
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-gray-300 text-sm">{alert.type}</p>
+                          <p className="text-gray-500 text-xs">{alert.timestamp}</p>
+                        </div>
+                      </div>
+                      <span className={`px-2 py-1 rounded text-xs ${getStatusStyles(alert.status)}`}>
                         {alert.status}
                       </span>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </motion.div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
           </div>
 
           {/* Sidebar */}
           <div className="space-y-6">
-            {/* AI Detection Patterns */}
+            {/* Security Status */}
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
-              className="bg-dark-800 rounded-xl p-6 border border-dark-700"
+              className="glass-card p-6"
             >
               <div className="flex items-center gap-2 mb-4">
-                <span className="text-xl">🤖</span>
-                <h3 className="text-lg font-semibold text-white">AI Detection Patterns</h3>
+                <Lock className="w-5 h-5 text-primary-400" />
+                <h3 className="text-lg font-semibold text-white">Security Status</h3>
               </div>
 
-              <div className="space-y-3">
-                {[
-                  { pattern: 'Unusual Transfer Amounts', detections: 12, accuracy: 94 },
-                  { pattern: 'Duplicate Invoices', detections: 8, accuracy: 91 },
-                  { pattern: 'New Vendor Payments', detections: 15, accuracy: 87 },
-                  { pattern: 'Off-Hours Activity', detections: 23, accuracy: 76 },
-                  { pattern: 'Access Location Anomaly', detections: 5, accuracy: 82 },
-                ].map((item, index) => (
-                  <motion.div
-                    key={item.pattern}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                    className="p-3 bg-dark-700/50 rounded-lg"
-                  >
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-white text-sm">{item.pattern}</span>
-                      <span className="text-gray-400 text-xs">{item.detections} detected</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 h-1.5 bg-dark-600 rounded-full overflow-hidden">
-                        <motion.div
-                          initial={{ width: 0 }}
-                          animate={{ width: `${item.accuracy}%` }}
-                          transition={{ duration: 0.8, delay: index * 0.1 }}
-                          className="h-full bg-primary-500 rounded-full"
-                        />
-                      </div>
-                      <span className="text-gray-400 text-xs">{item.accuracy}%</span>
-                    </div>
-                  </motion.div>
-                ))}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-3 bg-dark-700/50 rounded-lg">
+                  <span className="text-gray-300 text-sm">Firewall</span>
+                  <span className="text-green-400 text-sm flex items-center gap-1">
+                    <CheckCircle className="w-4 h-4" /> Active
+                  </span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-dark-700/50 rounded-lg">
+                  <span className="text-gray-300 text-sm">Encryption</span>
+                  <span className="text-green-400 text-sm flex items-center gap-1">
+                    <CheckCircle className="w-4 h-4" /> AES-256
+                  </span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-dark-700/50 rounded-lg">
+                  <span className="text-gray-300 text-sm">Two-Factor Auth</span>
+                  <span className="text-green-400 text-sm flex items-center gap-1">
+                    <CheckCircle className="w-4 h-4" /> Enabled
+                  </span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-dark-700/50 rounded-lg">
+                  <span className="text-gray-300 text-sm">Last Audit</span>
+                  <span className="text-gray-400 text-sm">7 days ago</span>
+                </div>
               </div>
             </motion.div>
 
-            {/* Quick Actions */}
+            {/* AI Protection */}
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.1 }}
-              className="bg-dark-800 rounded-xl p-6 border border-dark-700"
+              className="glass-card p-6"
             >
-              <h3 className="text-lg font-semibold text-white mb-4">Security Actions</h3>
+              <div className="flex items-center gap-2 mb-4">
+                <Brain className="w-5 h-5 text-primary-400" />
+                <h3 className="text-lg font-semibold text-white">AI Protection</h3>
+              </div>
+
+              <p className="text-gray-400 text-sm mb-4">
+                Our AI monitors your transactions 24/7 for suspicious patterns, 
+                duplicate payments, and unauthorized access attempts.
+              </p>
+
               <div className="space-y-2">
-                <button className="w-full py-3 px-4 bg-dark-700 text-white rounded-lg hover:bg-dark-600 transition-colors text-sm text-left flex items-center gap-3">
-                  <span>📋</span> Generate Security Report
-                </button>
-                <button className="w-full py-3 px-4 bg-dark-700 text-white rounded-lg hover:bg-dark-600 transition-colors text-sm text-left flex items-center gap-3">
-                  <span>⚙️</span> Configure Detection Rules
-                </button>
-                <button className="w-full py-3 px-4 bg-dark-700 text-white rounded-lg hover:bg-dark-600 transition-colors text-sm text-left flex items-center gap-3">
-                  <span>👥</span> Manage Access Controls
-                </button>
-                <button className="w-full py-3 px-4 bg-dark-700 text-white rounded-lg hover:bg-dark-600 transition-colors text-sm text-left flex items-center gap-3">
-                  <span>📧</span> Alert Notifications
-                </button>
+                <div className="flex items-center gap-2 text-sm text-gray-300">
+                  <CheckCircle className="w-4 h-4 text-green-400" />
+                  Duplicate invoice detection
+                </div>
+                <div className="flex items-center gap-2 text-sm text-gray-300">
+                  <CheckCircle className="w-4 h-4 text-green-400" />
+                  Unusual amount alerts
+                </div>
+                <div className="flex items-center gap-2 text-sm text-gray-300">
+                  <CheckCircle className="w-4 h-4 text-green-400" />
+                  New vendor verification
+                </div>
+                <div className="flex items-center gap-2 text-sm text-gray-300">
+                  <CheckCircle className="w-4 h-4 text-green-400" />
+                  Access pattern monitoring
+                </div>
               </div>
             </motion.div>
           </div>

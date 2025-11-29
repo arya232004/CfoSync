@@ -1,0 +1,49 @@
+Company,Client,Project,Revenue,Expenses,Profit
+Pixel,AlphaCorp,Mobile App Design,12000,7000,5000
+Pixel,BetaSoft,Website Revamp,15000,9000,6000
+Pixel,OmegaWorks,UX Audit,8000,3000,5000
+Pixel,GreenLeaf,Brand Identity,10000,4000,6000
+Pixel,HyperTech,Dashboard UI,14000,6000,8000
+Pixel,DataHive,App Prototype,9000,5000,4000
+Pixel,CloudMint,Product UI Kit,11000,7000,4000
+Pixel,UrbanLabs,UX Research,7000,3000,4000
+Pixel,NextGen,Design Sprint,16000,8000,8000
+Pixel,StreamFlow,SaaS UI Update,13000,6000,7000
+Pixel,VistaPrime,Landing Page,6000,2000,4000
+Pixel,VoltEdge,Animation Pack,7500,2500,5000
+Pixel,SilverMedia,Logo Suite,5000,1500,3500
+Pixel,AutoLogic,Dashboard Wireframes,9000,4000,5000
+Pixel,InsightHub,User Testing,6500,2500,4000
+Pixel,BlueSpark,Website Layout,8500,3000,5500
+Pixel,Finexa,FinTech UI,15000,9000,6000
+Pixel,TeraSystems,Illustration Pack,7000,2000,5000
+Pixel,NeoGlobe,Micro-Interactions,8000,3000,5000
+Pixel,PureLabs,Brand Refresh,10000,4000,6000
+NovaTech,AlphaCorp,API Integration,18000,9000,9000
+NovaTech,HyperTech,Cloud Migration,25000,14000,11000
+NovaTech,DataHive,Database Upgrade,20000,9000,11000
+NovaTech,GreenLeaf,CRM Setup,15000,7000,8000
+NovaTech,StreamFlow,Backend Optimization,22000,12000,10000
+NovaTech,VistaPrime,Security Audit,12000,4000,8000
+NovaTech,VoltEdge,Server Scaling,18000,11000,7000
+NovaTech,UrbanLabs,AI Model Tuning,16000,6000,10000
+NovaTech,Finexa,API Security Patch,14000,7000,7000
+NovaTech,OmegaWorks,Data Pipeline Build,21000,10000,11000
+NovaTech,NextGen,Full Stack Dev,30000,16000,14000
+NovaTech,BetaSoft,Backend Maintenance,10000,5000,5000
+NovaTech,SilverMedia,Hosting Setup,8000,2000,6000
+NovaTech,TeraSystems,ETL Dev,17000,8000,9000
+NovaTech,BlueSpark,Custom CMS,20000,11000,9000
+NovaTech,PureLabs,AI Chatbot,25000,13000,12000
+NovaTech,CloudMint,Platform Optimization,15000,7000,8000
+NovaTech,NeoGlobe,Server Migration,18000,9000,9000
+NovaTech,InsightHub,Analytics Integration,22000,10000,12000
+NovaTech,AutoLogic,IoT Sync Module,24000,12000,12000
+Pixel,ZenBytes,UI Redesign,14000,7000,7000
+Pixel,CircuitOne,Design System,18000,8000,10000
+NovaTech,ZenBytes,API Gateway Setup,20000,10000,10000
+NovaTech,CircuitOne,AI Workflow Engine,26000,14000,12000
+Pixel,PrimeSquare,Corporate Branding,13000,5000,8000
+NovaTech,PrimeSquare,Cloud Load Balancing,21000,11000,10000
+Pixel,Digix,Mobile UX Audit,9000,3000,6000
+NovaTech,Digix,Backend Refactor,15000,8000,7000

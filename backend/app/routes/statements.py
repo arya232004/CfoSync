@@ -97,6 +97,15 @@ async def upload_statement(
     try:
         user_id = current_user["id"]
         
+        # Check for duplicate - prevent uploading same file twice
+        from ..firebase import check_document_exists
+        if await check_document_exists(user_id, statement.name):
+            return {
+                "success": False,
+                "duplicate": True,
+                "message": f"Statement '{statement.name}' already exists. Skipping upload."
+            }
+        
         # Save the statement document
         doc_data = {
             "user_id": user_id,

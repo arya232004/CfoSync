@@ -22,12 +22,13 @@ import {
   Loader2
 } from 'lucide-react'
 import { useAuthStore } from '../../lib/auth'
-import { useStatementsStore } from '../../lib/store'
+import { useStatementsStore, useSettingsStore, formatCurrency as globalFormatCurrency } from '../../lib/store'
 import { pageDataService, individualAI, DashboardData, statementsAPI } from '../../services/aiService'
 import IndividualLayout from '../../components/layouts/IndividualLayout'
 
 export default function IndividualDashboard() {
   const { user } = useAuthStore()
+  const { currency } = useSettingsStore()
   const { transactions, statements, getTotalIncome, getTotalExpenses, getRecentTransactions } = useStatementsStore()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -80,9 +81,28 @@ export default function IndividualDashboard() {
       try {
         const userId = user?.id || 'demo-user'
         
-        // First, try to load statements and transactions from Firebase
-        const { addStatement, addTransactions } = useStatementsStore.getState()
+        // Clear old cached data and load fresh from Firebase
+        const { addStatement, addTransactions, clearAll } = useStatementsStore.getState()
+        
+        // Clear old data first
+        clearAll()
+        
         try {
+          // Load transactions from Firebase
+          const transactionsResponse = await statementsAPI.getTransactions(500)
+          if (transactionsResponse.transactions.length > 0) {
+            addTransactions(transactionsResponse.transactions.map((t: any) => ({
+              id: t.id,
+              date: t.date,
+              description: t.description,
+              amount: t.amount,
+              type: t.type as 'income' | 'expense',
+              category: t.category,
+              source: t.source
+            })))
+          }
+          
+          // Load statements from Firebase
           const statementsResponse = await statementsAPI.getStatements()
           if (statementsResponse.statements.length > 0) {
             statementsResponse.statements.forEach((stmt: any) => {
@@ -97,19 +117,6 @@ export default function IndividualDashboard() {
                 extractedData: stmt.extracted_data
               })
             })
-          }
-          
-          const transactionsResponse = await statementsAPI.getTransactions(500)
-          if (transactionsResponse.transactions.length > 0) {
-            addTransactions(transactionsResponse.transactions.map((t: any) => ({
-              id: t.id,
-              date: t.date,
-              description: t.description,
-              amount: t.amount,
-              type: t.type as 'income' | 'expense',
-              category: t.category,
-              source: t.source
-            })))
           }
         } catch (e) {
           console.log('No Firebase data yet')
@@ -135,14 +142,8 @@ export default function IndividualDashboard() {
     loadData()
   }, [user?.id])
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value)
-  }
+  // Use global formatCurrency with real exchange rate conversion
+  const formatCurrency = (value: number) => globalFormatCurrency(value, currency)
 
   if (loading) {
     return (
@@ -183,6 +184,52 @@ export default function IndividualDashboard() {
   }
 
   const { financialHealth, metrics, recentTransactions, spendingBreakdown, goals } = dashboardData
+
+  // Show empty state if no data
+  const hasNoData = !dashboardData.hasData && transactions.length === 0
+
+  if (hasNoData) {
+    return (
+      <IndividualLayout 
+        title={`Welcome, ${user?.name?.split(' ')[0] || 'there'}!`}
+        description="Let's get started with your financial journey"
+      >
+        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
+          <div className="w-24 h-24 bg-primary-500/10 rounded-full flex items-center justify-center mb-6">
+            <Upload className="w-12 h-12 text-primary-400" />
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-3">No Financial Data Yet</h2>
+          <p className="text-gray-400 max-w-md mb-8">
+            Upload your bank statements to get personalized insights, spending analysis, and AI-powered financial recommendations.
+          </p>
+          <Link 
+            to="/individual/upload" 
+            className="btn-primary px-8 py-3 text-lg flex items-center gap-2"
+          >
+            <Upload className="w-5 h-5" />
+            Upload Bank Statement
+          </Link>
+          <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6 max-w-3xl">
+            <div className="glass-card p-6 text-left">
+              <PiggyBank className="w-8 h-8 text-green-400 mb-3" />
+              <h3 className="font-semibold text-white mb-2">Track Spending</h3>
+              <p className="text-sm text-gray-400">See exactly where your money goes with automatic categorization.</p>
+            </div>
+            <div className="glass-card p-6 text-left">
+              <Shield className="w-8 h-8 text-blue-400 mb-3" />
+              <h3 className="font-semibold text-white mb-2">Get Insights</h3>
+              <p className="text-sm text-gray-400">AI-powered analysis identifies saving opportunities.</p>
+            </div>
+            <div className="glass-card p-6 text-left">
+              <Target className="w-8 h-8 text-purple-400 mb-3" />
+              <h3 className="font-semibold text-white mb-2">Set Goals</h3>
+              <p className="text-sm text-gray-400">Plan your financial future with personalized recommendations.</p>
+            </div>
+          </div>
+        </div>
+      </IndividualLayout>
+    )
+  }
 
   return (
     <IndividualLayout 
@@ -356,9 +403,14 @@ export default function IndividualDashboard() {
           >
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-white">Recent Transactions</h3>
-              <Link to="/individual/upload" className="text-sm text-primary-400 hover:text-primary-300 flex items-center gap-1">
-                Upload more <Upload className="w-4 h-4" />
-              </Link>
+              <div className="flex items-center gap-3">
+                <Link to="/individual/transactions" className="text-sm text-gray-400 hover:text-white">
+                  View all →
+                </Link>
+                <Link to="/individual/upload" className="text-sm text-primary-400 hover:text-primary-300 flex items-center gap-1">
+                  Upload <Upload className="w-4 h-4" />
+                </Link>
+              </div>
             </div>
             <div className="space-y-3">
               {/* Use real transactions if available, otherwise use API data */}

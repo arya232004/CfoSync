@@ -1,0 +1,9 @@
+Department,Budget Allocated,Amount Spent,Forecast,Status
+Technology,450000,382000,445000,On Track
+Sales,320000,285000,315000,On Track
+Marketing,180000,168000,195000,At Risk
+Operations,120000,98000,115000,On Track
+Product,95000,78000,92000,On Track
+Finance,85000,72000,82000,On Track
+Human Resources,65000,58000,64000,On Track
+Legal,45000,52000,55000,Over Budget

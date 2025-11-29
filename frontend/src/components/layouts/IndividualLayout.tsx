@@ -12,7 +12,8 @@ import {
   Settings,
   LogOut,
   Menu,
-  Sparkles
+  Sparkles,
+  Receipt
 } from 'lucide-react'
 import { useAuthStore } from '../../lib/auth'
 
@@ -21,6 +22,7 @@ const sidebarItems = [
   { icon: Sparkles, label: 'AI Agents', path: '/individual/agents' },
   { icon: MessageSquare, label: 'AI Chat', path: '/individual/chat' },
   { icon: Upload, label: 'Upload Statements', path: '/individual/upload' },
+  { icon: Receipt, label: 'Transactions', path: '/individual/transactions' },
   { icon: LineChart, label: 'Planning', path: '/individual/planning' },
   { icon: BarChart3, label: 'Investments', path: '/individual/investments' },
   { icon: Heart, label: 'Life Simulator', path: '/individual/simulator' },

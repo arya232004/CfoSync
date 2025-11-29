@@ -1,8 +1,23 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import aiService from '../../services/aiService';
-
-const { company: companyAI } = aiService;
+import { Link } from 'react-router-dom';
+import {
+  Users,
+  DollarSign,
+  TrendingUp,
+  RefreshCw,
+  Loader2,
+  Plus,
+  Brain,
+  Award,
+  Calendar,
+  BarChart3,
+  CheckCircle
+} from 'lucide-react';
+import { useAuthStore } from '../../lib/auth';
+import { useSettingsStore, formatCurrency } from '../../lib/store';
+import api from '../../lib/api';
+import toast from 'react-hot-toast';
 
 interface Employee {
   id: string;
@@ -10,7 +25,7 @@ interface Employee {
   role: string;
   department: string;
   salary: number;
-  bonus: number;
+  bonus?: number;
   status: 'active' | 'pending' | 'on_leave';
   aiInsight?: string;
 }
@@ -23,160 +38,215 @@ interface PayrollInsight {
   impact?: string;
 }
 
+interface DepartmentBudget {
+  name: string;
+  budget: number;
+  actual: number;
+  headcount: number;
+}
+
 const Payroll = () => {
-  const [aiLoading, setAiLoading] = useState({
-    analysis: false,
-    compliance: false,
-    forecast: false,
-  });
+  const { user } = useAuthStore();
+  const { currency } = useSettingsStore();
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [hasData, setHasData] = useState(false);
+  const [complianceLoading, setComplianceLoading] = useState(false);
+  
+  // Data states
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [insights, setInsights] = useState<PayrollInsight[]>([]);
+  const [departments, setDepartments] = useState<DepartmentBudget[]>([]);
   const [selectedDepartment, setSelectedDepartment] = useState('all');
-
-  const payrollData = {
-    totalMonthly: 312500,
-    totalAnnual: 3750000,
-    employeeCount: 24,
-    avgSalary: 130208,
-    benefits: 47000,
-    taxes: 62500,
-    nextPayroll: '2024-01-31',
-    daysUntilPayroll: 5,
-  };
-
-  const employees: Employee[] = [
-    { id: '1', name: 'Sarah Chen', role: 'CTO', department: 'Engineering', salary: 185000, bonus: 25000, status: 'active' },
-    { id: '2', name: 'Michael Johnson', role: 'VP Sales', department: 'Sales', salary: 165000, bonus: 45000, status: 'active', aiInsight: 'Top performer - consider retention bonus' },
-    { id: '3', name: 'Emily Rodriguez', role: 'Senior Engineer', department: 'Engineering', salary: 145000, bonus: 15000, status: 'active' },
-    { id: '4', name: 'David Kim', role: 'Product Manager', department: 'Product', salary: 135000, bonus: 12000, status: 'active' },
-    { id: '5', name: 'Lisa Wang', role: 'Marketing Director', department: 'Marketing', salary: 125000, bonus: 18000, status: 'on_leave', aiInsight: 'On parental leave - temp coverage needed' },
-    { id: '6', name: 'James Wilson', role: 'Engineer', department: 'Engineering', salary: 115000, bonus: 10000, status: 'active', aiInsight: 'Salary 15% below market - flight risk' },
-  ];
-
-  const departments = [
-    { name: 'Engineering', budget: 1450000, actual: 1320000, headcount: 12 },
-    { name: 'Sales', budget: 850000, actual: 780000, headcount: 5 },
-    { name: 'Marketing', budget: 420000, actual: 395000, headcount: 3 },
-    { name: 'Product', budget: 380000, actual: 355000, headcount: 2 },
-    { name: 'Operations', budget: 350000, actual: 340000, headcount: 2 },
-  ];
+  const [payrollData, setPayrollData] = useState({
+    totalMonthly: 0,
+    totalAnnual: 0,
+    employeeCount: 0,
+    avgSalary: 0,
+    benefits: 0,
+    taxes: 0,
+    nextPayroll: '',
+    daysUntilPayroll: 0
+  });
 
   useEffect(() => {
-    runPayrollAnalysis();
+    loadPayrollData();
   }, []);
 
-  const runPayrollAnalysis = async () => {
-    setAiLoading(prev => ({ ...prev, analysis: true }));
+  const loadPayrollData = async () => {
+    setLoading(true);
     try {
-      await companyAI.getCFOInsights('company-1');
+      const response = await api.post('/api/agents/payroll', {
+        company_id: user?.id
+      });
 
-      setInsights([
-        {
-          id: '1',
-          type: 'benchmark',
-          title: 'Market Salary Analysis',
-          message: '3 employees are 15%+ below market rate - potential retention risk',
-          impact: 'High',
-        },
-        {
-          id: '2',
-          type: 'optimization',
-          title: 'Benefits Optimization',
-          message: 'Switching to pooled HSA could save $8,400/year',
-          impact: '-2.8%',
-        },
-        {
-          id: '3',
-          type: 'compliance',
-          title: 'Compliance Alert',
-          message: 'Q1 941 tax filing due in 18 days - all documentation ready',
-          impact: 'On Track',
-        },
-        {
-          id: '4',
-          type: 'forecast',
-          title: 'Hiring Impact',
-          message: 'Adding 3 engineers by Q2 will increase monthly payroll by $35K',
-          impact: '+11%',
-        },
-      ]);
+      const data = response.data;
+      setHasData(data.hasData);
+
+      if (data.hasData) {
+        // Set employees
+        setEmployees(data.employees || []);
+        
+        // Set insights
+        setInsights(data.insights || []);
+        
+        // Set departments
+        setDepartments(data.departments || []);
+        
+        // Set summary data
+        if (data.summary) {
+          setPayrollData({
+            totalMonthly: data.summary.totalMonthly || 0,
+            totalAnnual: data.summary.totalAnnual || 0,
+            employeeCount: data.summary.employeeCount || 0,
+            avgSalary: data.summary.avgSalary || 0,
+            benefits: data.summary.benefits || 0,
+            taxes: data.summary.taxes || 0,
+            nextPayroll: data.summary.nextPayroll || 'Not scheduled',
+            daysUntilPayroll: data.summary.daysUntilPayroll || 0
+          });
+        }
+      }
     } catch (error) {
-      console.error('Payroll analysis error:', error);
+      console.error('Error loading payroll:', error);
+      toast.error('Failed to load payroll data');
+    } finally {
+      setLoading(false);
     }
-    setAiLoading(prev => ({ ...prev, analysis: false }));
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadPayrollData();
+    setRefreshing(false);
+    toast.success('Payroll data refreshed');
   };
 
   const handleComplianceCheck = async () => {
-    setAiLoading(prev => ({ ...prev, compliance: true }));
+    setComplianceLoading(true);
     try {
-      await companyAI.analyzePayroll('company-1');
+      // Simulate compliance check
+      await new Promise(resolve => setTimeout(resolve, 1500));
       
-      setInsights(prev => [{
+      const newInsight: PayrollInsight = {
         id: `compliance-${Date.now()}`,
         type: 'compliance',
-        title: 'Full Compliance Audit Complete',
-        message: '✓ All W-4s current ✓ I-9 verification complete ✓ State tax registrations active ✓ Workers comp coverage verified',
-        impact: '100%',
-      }, ...prev]);
+        title: 'Compliance Audit Complete',
+        message: '✓ All W-4s current ✓ I-9 verification complete ✓ Tax registrations active',
+        impact: '100%'
+      };
+      
+      setInsights(prev => [newInsight, ...prev]);
+      toast.success('Compliance check completed');
     } catch (error) {
-      console.error('Compliance check error:', error);
+      toast.error('Compliance check failed');
+    } finally {
+      setComplianceLoading(false);
     }
-    setAiLoading(prev => ({ ...prev, compliance: false }));
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-    }).format(amount);
-  };
+  const formatMoney = (amount: number) => formatCurrency(amount, currency);
 
   const filteredEmployees = selectedDepartment === 'all' 
     ? employees 
     : employees.filter(e => e.department === selectedDepartment);
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-dark-900 via-dark-800 to-dark-900 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 text-primary-500 animate-spin mx-auto mb-4" />
+          <p className="text-gray-400">Loading payroll data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // No Data State
+  if (!hasData) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-dark-900 via-dark-800 to-dark-900 p-6">
+        <div className="max-w-4xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="glass-card p-8 text-center"
+          >
+            <div className="w-20 h-20 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Users className="w-10 h-10 text-blue-400" />
+            </div>
+            <h1 className="text-3xl font-bold text-white mb-4">Payroll Management</h1>
+            <p className="text-gray-400 mb-8 max-w-lg mx-auto">
+              Add your employee data to unlock AI-powered payroll analytics, 
+              compliance tracking, and compensation benchmarking.
+            </p>
+            <Link
+              to="/company/onboarding"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-500 to-accent-500 rounded-xl font-semibold text-white hover:shadow-glow transition-all"
+            >
+              <Plus className="w-5 h-5" />
+              Add Employee Data
+            </Link>
+          </motion.div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="p-6">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-dark-900 via-dark-800 to-dark-900 p-6">
+      <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold text-white mb-2">Payroll Management</h1>
+            <h1 className="text-3xl font-bold text-white">Payroll Management</h1>
             <p className="text-gray-400">AI-Powered Payroll Analytics & Compliance</p>
           </div>
           
           <div className="flex items-center gap-3">
             <button
               onClick={handleComplianceCheck}
-              disabled={aiLoading.compliance}
-              className="px-4 py-2 bg-dark-700 text-white rounded-lg hover:bg-dark-600 transition-colors"
+              disabled={complianceLoading}
+              className="px-4 py-2 glass-card text-white hover:bg-white/10 transition-colors flex items-center gap-2"
             >
-              {aiLoading.compliance ? 'Checking...' : '✓ Run Compliance Check'}
+              {complianceLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <CheckCircle className="w-4 h-4" />
+              )}
+              Run Compliance Check
             </button>
             <div className="px-4 py-2 bg-primary-600/20 text-primary-400 rounded-lg">
               Next Payroll: {payrollData.daysUntilPayroll} days
             </div>
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="p-2 glass-card hover:bg-white/10 transition-colors"
+            >
+              <RefreshCw className={`w-5 h-5 text-gray-400 ${refreshing ? 'animate-spin' : ''}`} />
+            </button>
           </div>
         </div>
 
         {/* Key Metrics */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           {[
-            { label: 'Monthly Payroll', value: formatCurrency(payrollData.totalMonthly), icon: '💵' },
-            { label: 'Employees', value: payrollData.employeeCount, icon: '👥' },
-            { label: 'Avg Salary', value: formatCurrency(payrollData.avgSalary), icon: '📊' },
-            { label: 'Benefits', value: formatCurrency(payrollData.benefits), icon: '🏥' },
-            { label: 'Taxes', value: formatCurrency(payrollData.taxes), icon: '📋' },
+            { label: 'Monthly Payroll', value: formatMoney(payrollData.totalMonthly), icon: DollarSign },
+            { label: 'Employees', value: payrollData.employeeCount, icon: Users },
+            { label: 'Avg Salary', value: formatMoney(payrollData.avgSalary), icon: BarChart3 },
+            { label: 'Benefits', value: formatMoney(payrollData.benefits), icon: Award },
+            { label: 'Taxes', value: formatMoney(payrollData.taxes), icon: Calendar },
           ].map((metric, index) => (
             <motion.div
               key={metric.label}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.1 }}
-              className="bg-dark-800 rounded-xl p-4 border border-dark-700"
+              className="glass-card p-4"
             >
               <div className="flex items-center gap-2 mb-2">
-                <span className="text-lg">{metric.icon}</span>
+                <metric.icon className="w-4 h-4 text-gray-400" />
                 <span className="text-gray-400 text-sm">{metric.label}</span>
               </div>
               <div className="text-xl font-bold text-white">{metric.value}</div>
@@ -190,7 +260,7 @@ const Payroll = () => {
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-dark-800 rounded-xl p-6 border border-dark-700"
+              className="glass-card p-6"
             >
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-white">Employee Compensation</h3>
@@ -206,84 +276,92 @@ const Payroll = () => {
                 </select>
               </div>
 
-              <div className="space-y-3">
-                {filteredEmployees.map((employee, index) => (
-                  <motion.div
-                    key={employee.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                    className={`p-4 rounded-lg ${
-                      employee.aiInsight ? 'bg-dark-700/80 border border-yellow-500/20' : 'bg-dark-700/50'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold ${
-                          employee.status === 'active' ? 'bg-green-500/20' :
-                          employee.status === 'on_leave' ? 'bg-yellow-500/20' : 'bg-blue-500/20'
-                        }`}>
-                          {employee.name.charAt(0)}
+              {filteredEmployees.length === 0 ? (
+                <p className="text-gray-400 text-center py-8">No employees found.</p>
+              ) : (
+                <div className="space-y-3">
+                  {filteredEmployees.map((employee, index) => (
+                    <motion.div
+                      key={employee.id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                      className={`p-4 rounded-lg ${
+                        employee.aiInsight ? 'bg-dark-700/80 border border-yellow-500/20' : 'bg-dark-700/50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold ${
+                            employee.status === 'active' ? 'bg-green-500/20' :
+                            employee.status === 'on_leave' ? 'bg-yellow-500/20' : 'bg-blue-500/20'
+                          }`}>
+                            {employee.name.charAt(0)}
+                          </div>
+                          <div>
+                            <div className="text-white font-medium">{employee.name}</div>
+                            <div className="text-gray-400 text-sm">{employee.role} • {employee.department}</div>
+                          </div>
                         </div>
-                        <div>
-                          <div className="text-white font-medium">{employee.name}</div>
-                          <div className="text-gray-400 text-sm">{employee.role} • {employee.department}</div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-white font-semibold">{formatCurrency(employee.salary)}</div>
-                        <div className="text-green-400 text-sm">+{formatCurrency(employee.bonus)} bonus</div>
-                      </div>
-                    </div>
-                    
-                    {employee.aiInsight && (
-                      <div className="mt-3 pt-3 border-t border-dark-600">
-                        <div className="flex items-center gap-2 text-yellow-400 text-sm">
-                          <span>🤖</span>
-                          <span>AI Insight: {employee.aiInsight}</span>
+                        <div className="text-right">
+                          <div className="text-white font-semibold">{formatMoney(employee.salary)}</div>
+                          {employee.bonus && (
+                            <div className="text-green-400 text-sm">+{formatMoney(employee.bonus)} bonus</div>
+                          )}
                         </div>
                       </div>
-                    )}
-                  </motion.div>
-                ))}
-              </div>
+                      
+                      {employee.aiInsight && (
+                        <div className="mt-3 pt-3 border-t border-dark-600">
+                          <div className="flex items-center gap-2 text-yellow-400 text-sm">
+                            <Brain className="w-4 h-4" />
+                            <span>AI Insight: {employee.aiInsight}</span>
+                          </div>
+                        </div>
+                      )}
+                    </motion.div>
+                  ))}
+                </div>
+              )}
             </motion.div>
 
             {/* Department Breakdown */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="bg-dark-800 rounded-xl p-6 border border-dark-700"
-            >
-              <h3 className="text-lg font-semibold text-white mb-4">Department Budget vs Actual</h3>
-              <div className="space-y-4">
-                {departments.map((dept, index) => {
-                  const utilization = (dept.actual / dept.budget) * 100;
-                  return (
-                    <div key={dept.name} className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-white">{dept.name}</span>
-                        <span className="text-gray-400">
-                          {formatCurrency(dept.actual)} / {formatCurrency(dept.budget)} ({dept.headcount} employees)
-                        </span>
+            {departments.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+                className="glass-card p-6"
+              >
+                <h3 className="text-lg font-semibold text-white mb-4">Department Budget vs Actual</h3>
+                <div className="space-y-4">
+                  {departments.map((dept, index) => {
+                    const utilization = dept.budget > 0 ? (dept.actual / dept.budget) * 100 : 0;
+                    return (
+                      <div key={dept.name} className="space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-white">{dept.name}</span>
+                          <span className="text-gray-400">
+                            {formatMoney(dept.actual)} / {formatMoney(dept.budget)} ({dept.headcount} employees)
+                          </span>
+                        </div>
+                        <div className="h-3 bg-dark-700 rounded-full overflow-hidden">
+                          <motion.div
+                            initial={{ width: 0 }}
+                            animate={{ width: `${Math.min(utilization, 100)}%` }}
+                            transition={{ duration: 0.8, delay: index * 0.1 }}
+                            className={`h-full rounded-full ${
+                              utilization > 95 ? 'bg-red-500' :
+                              utilization > 85 ? 'bg-yellow-500' : 'bg-green-500'
+                            }`}
+                          />
+                        </div>
                       </div>
-                      <div className="h-3 bg-dark-700 rounded-full overflow-hidden">
-                        <motion.div
-                          initial={{ width: 0 }}
-                          animate={{ width: `${utilization}%` }}
-                          transition={{ duration: 0.8, delay: index * 0.1 }}
-                          className={`h-full rounded-full ${
-                            utilization > 95 ? 'bg-red-500' :
-                            utilization > 85 ? 'bg-yellow-500' : 'bg-green-500'
-                          }`}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </motion.div>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            )}
           </div>
 
           {/* Sidebar */}
@@ -292,17 +370,15 @@ const Payroll = () => {
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
-              className="bg-dark-800 rounded-xl p-6 border border-dark-700"
+              className="glass-card p-6"
             >
               <div className="flex items-center gap-2 mb-4">
-                <span className="text-xl">🤖</span>
+                <Brain className="w-5 h-5 text-primary-400" />
                 <h3 className="text-lg font-semibold text-white">AI Payroll Insights</h3>
               </div>
 
-              {aiLoading.analysis ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="animate-spin w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full" />
-                </div>
+              {insights.length === 0 ? (
+                <p className="text-gray-400 text-sm">No insights available yet.</p>
               ) : (
                 <div className="space-y-3">
                   {insights.map((insight, index) => (
@@ -344,19 +420,25 @@ const Payroll = () => {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.1 }}
-              className="bg-dark-800 rounded-xl p-6 border border-dark-700"
+              className="glass-card p-6"
             >
               <h3 className="text-lg font-semibold text-white mb-4">Quick Actions</h3>
               <div className="space-y-2">
-                <button className="w-full py-3 px-4 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm">
-                  📊 Generate Payroll Report
+                <button className="w-full py-3 px-4 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm flex items-center justify-center gap-2">
+                  <BarChart3 className="w-4 h-4" />
+                  Generate Payroll Report
                 </button>
-                <button className="w-full py-3 px-4 bg-dark-700 text-white rounded-lg hover:bg-dark-600 transition-colors text-sm">
-                  💰 AI: Optimize Compensation
+                <button className="w-full py-3 px-4 bg-dark-700 text-white rounded-lg hover:bg-dark-600 transition-colors text-sm flex items-center justify-center gap-2">
+                  <TrendingUp className="w-4 h-4" />
+                  Benchmark Salaries
                 </button>
-                <button className="w-full py-3 px-4 bg-dark-700 text-white rounded-lg hover:bg-dark-600 transition-colors text-sm">
-                  📈 Benchmark Salaries
-                </button>
+                <Link
+                  to="/company/onboarding"
+                  className="w-full py-3 px-4 bg-dark-700 text-white rounded-lg hover:bg-dark-600 transition-colors text-sm flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Employee
+                </Link>
               </div>
             </motion.div>
           </div>
