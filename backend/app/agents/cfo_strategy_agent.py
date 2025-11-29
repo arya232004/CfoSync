@@ -6,7 +6,7 @@ This agent provides strategic CFO-level guidance for startups and companies.
 
 import json
 from typing import Any
-from google.adk import Agent
+from app.agents.base import Agent
 
 from app.agents.base import create_agent, AgentRunner
 

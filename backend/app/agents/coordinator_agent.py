@@ -7,7 +7,7 @@ It's the entry point for all user requests in CFOSync.
 
 import json
 from typing import Any
-from google.adk import Agent
+from app.agents.base import Agent
 
 from app.agents.base import create_agent, AgentRunner
 

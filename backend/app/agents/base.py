@@ -1,167 +1,60 @@
 """
-Base utilities for creating Google ADK Agents with Gemini.
+Base utilities for creating AI Agents with Google Generative AI (Gemini).
 
-Google ADK uses:
-- Agent: The main agent class with model, instructions, tools, and sub_agents
-- Tools: Python functions that agents can call
-- Sub-agents: Other agents that can be delegated to
-- Runner: Executes agents (InMemoryRunner for local, VertexAiRunner for cloud)
-- SessionService: Manages conversation state
+This module provides a simplified agent framework that uses google-generativeai
+for generating AI responses with financial context.
 """
 
-from typing import Any, Callable
-from google.adk import Agent
-from google.adk.tools import FunctionTool
-from google.adk.runners import InMemoryRunner
-from google.genai import types
+from typing import Any, Callable, Optional
+import google.generativeai as genai
 
 from app.config import settings
 
 
-def create_tool(func: Callable) -> FunctionTool:
-    """
-    Create an ADK FunctionTool from a Python function.
-    The function's docstring becomes the tool description.
-    """
-    return FunctionTool(func=func)
+# Configure the Gemini API
+genai.configure(api_key=settings.GOOGLE_API_KEY)
 
 
-def create_agent(
-    name: str,
-    instruction: str,
-    description: str | None = None,
-    tools: list[Callable] | None = None,
-    sub_agents: list[Agent] | None = None,
-    model: str | None = None,
-) -> Agent:
-    """
-    Factory to create a Google ADK Agent with Gemini.
+class Agent:
+    """Simple agent class that wraps Gemini for financial analysis."""
     
-    Args:
-        name: Unique identifier for the agent
-        instruction: System prompt defining agent behavior
-        description: Short description (used when agent is a sub-agent)
-        tools: List of Python functions to use as tools
-        sub_agents: List of Agent instances for delegation
-        model: Override default Gemini model
-    
-    Returns:
-        Configured Google ADK Agent
-    """
-    agent_kwargs: dict[str, Any] = {
-        "name": name,
-        "model": model or settings.GEMINI_MODEL,
-        "instruction": instruction,
-    }
-    
-    if description:
-        agent_kwargs["description"] = description
-    
-    if tools:
-        # Convert functions to FunctionTools
-        agent_kwargs["tools"] = [create_tool(t) for t in tools]
-    
-    if sub_agents:
-        agent_kwargs["sub_agents"] = sub_agents
-    
-    return Agent(**agent_kwargs)
-
-
-class AgentRunner:
-    """
-    Wrapper to run ADK agents with session management.
-    Handles conversation history and context injection.
-    """
-    
-    def __init__(self, agent: Agent, app_name: str = "cfosync"):
-        self.agent = agent
-        self.app_name = app_name
-        self.runner = InMemoryRunner(
-            agent=agent,
-            app_name=app_name,
-        )
-        # Access the runner's built-in session service
-        self.session_service = self.runner.session_service
-    
-    async def run(
+    def __init__(
         self,
-        user_id: str,
-        message: str,
-        session_id: str | None = None,
-        context: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """
-        Execute the agent with a user message.
+        name: str,
+        instruction: str,
+        description: str = "",
+        model: str = None,
+        tools: list[Callable] = None,
+        sub_agents: list['Agent'] = None,
+    ):
+        self.name = name
+        self.instruction = instruction
+        self.description = description
+        self.model_name = model or settings.GEMINI_MODEL
+        self.tools = tools or []
+        self.sub_agents = sub_agents or []
         
-        Args:
-            user_id: Unique user identifier
-            message: User's input message
-            session_id: Optional session ID (auto-generated if not provided)
-            context: Additional context to inject into the prompt
-        
-        Returns:
-            dict with 'response' text and 'events' list
-        """
-        sid = session_id or f"{user_id}_{self.agent.name}"
-        
-        # Get or create session
-        session = await self.session_service.get_session(
-            app_name=self.app_name,
-            user_id=user_id,
-            session_id=sid,
+        # Create the Gemini model
+        self.model = genai.GenerativeModel(
+            model_name=self.model_name,
+            system_instruction=instruction,
         )
-        
-        if session is None:
-            session = await self.session_service.create_session(
-                app_name=self.app_name,
-                user_id=user_id,
-                session_id=sid,
-                state=context or {},
-            )
-        
-        # Build prompt with context
-        full_message = self._inject_context(message, context)
-        
-        # Convert message string to Content object
-        content = types.Content(
-            parts=[types.Part(text=full_message)],
-            role="user"
-        )
-        
-        # Run and collect response
-        response_parts: list[str] = []
-        events: list[dict] = []
-        
-        async for event in self.runner.run_async(
-            user_id=user_id,
-            session_id=session.id,
-            new_message=content,
-        ):
-            event_data = {"type": type(event).__name__}
-            
-            if hasattr(event, "content") and event.content:
-                for part in event.content.parts:
-                    if hasattr(part, "text") and part.text:
-                        response_parts.append(part.text)
-                        event_data["text"] = part.text
-            
-            if hasattr(event, "tool_calls"):
-                event_data["tool_calls"] = str(event.tool_calls)
-            
-            events.append(event_data)
-        
-        return {
-            "response": "".join(response_parts),
-            "events": events,
-            "session_id": session.id,
-        }
     
-    def _inject_context(self, message: str, context: dict[str, Any] | None) -> str:
-        """Inject context data into the user message as structured financial data."""
+    async def generate(self, prompt: str, context: dict[str, Any] = None) -> str:
+        """Generate a response from the agent."""
+        full_prompt = self._inject_context(prompt, context)
+        
+        try:
+            response = self.model.generate_content(full_prompt)
+            return response.text
+        except Exception as e:
+            return f"Error generating response: {str(e)}"
+    
+    def _inject_context(self, message: str, context: dict[str, Any] = None) -> str:
+        """Inject context data into the user message."""
         if not context:
             return message
         
-        # Build a well-formatted context section
         context_parts = []
         
         # User info
@@ -194,7 +87,7 @@ class AgentRunner:
             if inv.get("holdings"):
                 context_parts.append("  • Holdings:")
                 for h in inv["holdings"][:5]:
-                    context_parts.append(f"    - {h['symbol']}: {h['shares']} shares @ ${h['purchase_price']:.2f}")
+                    context_parts.append(f"    - {h['symbol']}: {h['shares']} shares @ ${h.get('purchase_price', 0):.2f}")
         
         # Goals Summary
         if context.get("goals_summary"):
@@ -212,31 +105,114 @@ class AgentRunner:
                     progress = (g['current'] / g['target'] * 100) if g['target'] > 0 else 0
                     context_parts.append(f"    - {g['name']}: ${g['current']:,.0f}/${g['target']:,.0f} ({progress:.0f}%)")
         
-        # Documents Summary
-        if context.get("documents_summary"):
-            ds = context["documents_summary"]
-            context_parts.append(f"\n📄 DOCUMENTS: {ds.get('total_documents', 0)} uploaded")
+        # Company Data
+        if context.get("company_data"):
+            cd = context["company_data"]
+            context_parts.append("\n🏢 COMPANY DATA:")
+            context_parts.append(f"  • Company: {cd.get('company_name', 'N/A')}")
+            context_parts.append(f"  • Industry: {cd.get('industry', 'N/A')}")
+            if cd.get("financials"):
+                fin = cd["financials"]
+                context_parts.append(f"  • Revenue: ${fin.get('revenue', 0):,.0f}")
+                context_parts.append(f"  • Expenses: ${fin.get('expenses', 0):,.0f}")
+                context_parts.append(f"  • Net Income: ${fin.get('net_income', 0):,.0f}")
         
-        # Profile Info
-        if context.get("profile"):
-            profile = context["profile"]
-            context_parts.append("\n👤 PROFILE:")
-            if profile.get("financial_goals"):
-                context_parts.append(f"  • Financial Goals: {', '.join(profile.get('financial_goals', []))}")
-            if profile.get("monthly_income"):
-                context_parts.append(f"  • Monthly Income: ${profile.get('monthly_income', 0):,.2f}")
-            if profile.get("risk_tolerance"):
-                context_parts.append(f"  • Risk Tolerance: {profile.get('risk_tolerance', 'moderate')}")
+        # Employees
+        if context.get("employees"):
+            emp_list = context["employees"]
+            context_parts.append(f"\n👥 EMPLOYEES: {len(emp_list)} total")
+            total_payroll = sum(e.get("salary", 0) for e in emp_list)
+            context_parts.append(f"  • Total Annual Payroll: ${total_payroll:,.0f}")
         
-        # No data available message
-        if not context.get("has_financial_data"):
-            context_parts.append("\n⚠️ NOTE: No financial data uploaded yet. Suggest user to upload bank statements or add transactions.")
+        # Transactions
+        if context.get("transactions"):
+            txns = context["transactions"]
+            context_parts.append(f"\n💳 RECENT TRANSACTIONS: {len(txns)} records")
         
         if context_parts:
-            return f"""=== USER'S FINANCIAL DATA ===
+            return f"""=== FINANCIAL CONTEXT ===
 {chr(10).join(context_parts)}
 ================================
 
 {message}"""
         
         return message
+
+
+class AgentRunner:
+    """
+    Wrapper to run agents with session management.
+    Handles conversation history and context injection.
+    """
+    
+    def __init__(self, agent: Agent, app_name: str = "cfosync"):
+        self.agent = agent
+        self.app_name = app_name
+        self._sessions: dict[str, list] = {}
+    
+    async def run(
+        self,
+        user_id: str,
+        message: str,
+        session_id: str = None,
+        context: dict[str, Any] = None,
+    ) -> dict[str, Any]:
+        """
+        Execute the agent with a user message.
+        
+        Args:
+            user_id: Unique user identifier
+            message: User's input message
+            session_id: Optional session ID
+            context: Additional context to inject into the prompt
+        
+        Returns:
+            dict with 'response' text and metadata
+        """
+        sid = session_id or f"{user_id}_{self.agent.name}"
+        
+        # Generate response
+        response = await self.agent.generate(message, context)
+        
+        return {
+            "response": response,
+            "session_id": sid,
+            "agent": self.agent.name,
+        }
+
+
+def create_agent(
+    name: str,
+    instruction: str,
+    description: str = None,
+    tools: list[Callable] = None,
+    sub_agents: list[Agent] = None,
+    model: str = None,
+) -> Agent:
+    """
+    Factory to create an Agent with Gemini.
+    
+    Args:
+        name: Unique identifier for the agent
+        instruction: System prompt defining agent behavior
+        description: Short description
+        tools: List of Python functions to use as tools
+        sub_agents: List of Agent instances for delegation
+        model: Override default Gemini model
+    
+    Returns:
+        Configured Agent
+    """
+    return Agent(
+        name=name,
+        instruction=instruction,
+        description=description or "",
+        model=model,
+        tools=tools,
+        sub_agents=sub_agents,
+    )
+
+
+def create_tool(func: Callable):
+    """Create a tool from a Python function (placeholder for compatibility)."""
+    return func

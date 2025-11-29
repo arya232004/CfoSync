@@ -39,3 +39,5 @@ npm-debug.log*
 # Cache
 .cache/
 .parcel-cache/
+
+backend/firebase-credentials.json

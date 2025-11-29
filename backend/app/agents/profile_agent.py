@@ -6,7 +6,7 @@ This agent analyzes onboarding data and creates a comprehensive financial identi
 
 import json
 from typing import Any
-from google.adk import Agent
+from app.agents.base import Agent
 
 from app.agents.base import create_agent, AgentRunner
 

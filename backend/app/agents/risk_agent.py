@@ -6,7 +6,7 @@ This agent monitors for various financial risks and flags issues proactively.
 
 import json
 from typing import Any
-from google.adk import Agent
+from app.agents.base import Agent
 
 from app.agents.base import create_agent, AgentRunner
 

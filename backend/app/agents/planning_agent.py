@@ -6,7 +6,7 @@ This agent builds personalized budgets, goals, and financial roadmaps.
 
 import json
 from typing import Any
-from google.adk import Agent
+from app.agents.base import Agent
 
 from app.agents.base import create_agent, AgentRunner
 

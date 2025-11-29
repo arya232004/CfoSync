@@ -7,7 +7,7 @@ This agent forecasts cash flow, predicts payment delays, and optimizes liquidity
 import json
 from typing import Any
 from datetime import datetime, timedelta
-from google.adk import Agent
+from app.agents.base import Agent
 
 from app.agents.base import create_agent, AgentRunner
 

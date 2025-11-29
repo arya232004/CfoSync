@@ -8,7 +8,7 @@ import json
 import re
 from typing import Any
 from datetime import datetime
-from google.adk import Agent
+from app.agents.base import Agent
 
 from app.agents.base import create_agent, AgentRunner
 

@@ -7,7 +7,7 @@ This agent monitors and ensures financial compliance with regulations.
 import json
 from typing import Any
 from datetime import datetime, timedelta
-from google.adk import Agent
+from app.agents.base import Agent
 
 from app.agents.base import create_agent, AgentRunner
 

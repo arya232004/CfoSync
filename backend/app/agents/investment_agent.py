@@ -3,8 +3,7 @@
 import json
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
-from google.adk import Agent
-from google.adk.tools import FunctionTool
+from app.agents.base import Agent, create_tool
 
 # Try to import yfinance, fallback gracefully if not available
 try:
@@ -1112,12 +1111,12 @@ def create_investment_agent() -> Agent:
     """Create an investment analysis agent with market data tools."""
     
     tools = [
-        FunctionTool(func=get_stock_price),
-        FunctionTool(func=get_stock_history),
-        FunctionTool(func=get_market_overview),
-        FunctionTool(func=search_stocks),
-        FunctionTool(func=analyze_portfolio),
-        FunctionTool(func=get_investment_recommendations),
+        create_tool(get_stock_price),
+        create_tool(get_stock_history),
+        create_tool(get_market_overview),
+        create_tool(search_stocks),
+        create_tool(analyze_portfolio),
+        create_tool(get_investment_recommendations),
     ]
     
     agent = Agent(
@@ -1176,11 +1175,10 @@ async def run_investment_query(query: str, context: dict = None) -> str:
         Agent's response
     """
     try:
-        from google.adk.runners import InMemoryRunner
-        from google.genai import types
+        from app.agents.base import AgentRunner
         
         agent = get_investment_agent()
-        runner = InMemoryRunner(agent=agent, app_name="investment_analyst")
+        runner = AgentRunner(agent=agent, app_name="investment_analyst")
         
         # Build context-aware prompt
         full_query = query
@@ -1191,27 +1189,13 @@ async def run_investment_query(query: str, context: dict = None) -> str:
                 full_query += f"\n\nUser's risk tolerance: {context['risk_tolerance']}"
         
         user_id = context.get("user_id", "user") if context else "user"
-        session = await runner.session_service.create_session(
-            app_name="investment_analyst",
-            user_id=user_id
-        )
         
-        content = types.Content(
-            role="user",
-            parts=[types.Part(text=full_query)]
-        )
-        
-        response_text = ""
-        async for event in runner.run(
+        result = await runner.run(
             user_id=user_id,
-            session_id=session.id,
-            new_message=content
-        ):
-            if hasattr(event, 'content') and event.content:
-                for part in event.content.parts:
-                    if hasattr(part, 'text') and part.text:
-                        response_text += part.text
+            message=full_query,
+            context=context
+        )
         
-        return response_text if response_text else "I couldn't generate a response. Please try again."
+        return result.get("response", "I couldn't generate a response. Please try again.")
     except Exception as e:
         return f"Error processing investment query: {str(e)}"

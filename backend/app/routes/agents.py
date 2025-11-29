@@ -221,6 +221,23 @@ class PayrollRequest(BaseModel):
     request_type: Optional[str] = "payroll_analysis"
 
 
+class GeneratePayrollSlipsRequest(BaseModel):
+    company_id: str
+    pay_period: Optional[str] = "2025-01"  # YYYY-MM format
+    
+
+class SetBudgetRequest(BaseModel):
+    company_id: str
+    monthly_budget: float
+    department_allocations: Optional[dict] = None  # {"Engineering": 50000, "Marketing": 20000}
+    
+
+class FraudAlertUpdateRequest(BaseModel):
+    company_id: str
+    alert_id: str
+    status: str  # "resolved", "dismissed", "investigating"
+
+
 class NudgeRequest(BaseModel):
     user_id: Optional[str] = None
     company_id: Optional[str] = None
@@ -1786,14 +1803,14 @@ async def analyze_payroll(
             "benchmarks": benchmarks,
             "employees": processed_employees,
             "departments": list(departments.values()),
-            "payrollData": {
+            "summary": {
                 "totalMonthly": round(monthly_payroll, 0),
                 "totalAnnual": round(total_salary, 0),
                 "employeeCount": employee_count,
                 "avgSalary": round(avg_salary, 0),
-                "benefits": round(total_salary * 0.15, 0),  # Estimate 15% benefits
-                "taxes": round(total_salary * 0.2, 0),  # Estimate 20% taxes
-                "nextPayroll": "2024-01-31",
+                "benefits": round(total_salary * 0.15, 0),
+                "taxes": round(total_salary * 0.2, 0),
+                "nextPayroll": "2025-01-31",
                 "daysUntilPayroll": 5
             },
             "hasData": True
@@ -1801,6 +1818,502 @@ async def analyze_payroll(
     except Exception as e:
         print(f"Payroll analysis error: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to analyze payroll: {str(e)}")
+
+
+@router.post("/payroll/upload-employees")
+async def upload_employees_csv(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Upload employee CSV for payroll processing."""
+    user_id = current_user["id"]
+    
+    if not file.filename.endswith('.csv'):
+        raise HTTPException(status_code=400, detail="Only CSV files are supported")
+    
+    try:
+        content = await file.read()
+        content_str = content.decode('utf-8-sig')
+        
+        reader = csv.DictReader(io.StringIO(content_str))
+        headers = reader.fieldnames or []
+        rows = list(reader)
+        
+        if not rows:
+            raise HTTPException(status_code=400, detail="CSV file is empty")
+        
+        # Parse employee data
+        employees = []
+        for i, row in enumerate(rows):
+            # Find columns dynamically
+            name_col = next((h for h in headers if any(kw in h.lower() for kw in ['name', 'employee'])), headers[0])
+            role_col = next((h for h in headers if any(kw in h.lower() for kw in ['role', 'position', 'title', 'job'])), None)
+            dept_col = next((h for h in headers if any(kw in h.lower() for kw in ['dept', 'department'])), None)
+            salary_col = next((h for h in headers if any(kw in h.lower() for kw in ['salary', 'pay', 'wage', 'annual'])), None)
+            bonus_col = next((h for h in headers if any(kw in h.lower() for kw in ['bonus', 'commission'])), None)
+            email_col = next((h for h in headers if any(kw in h.lower() for kw in ['email', 'mail'])), None)
+            hire_col = next((h for h in headers if any(kw in h.lower() for kw in ['hire', 'start', 'join'])), None)
+            status_col = next((h for h in headers if any(kw in h.lower() for kw in ['status', 'active'])), None)
+            
+            employee = {
+                'id': f"emp_{i+1}",
+                'name': str(row.get(name_col, f'Employee {i+1}')),
+                'role': str(row.get(role_col, 'Staff')) if role_col else 'Staff',
+                'department': str(row.get(dept_col, 'General')) if dept_col else 'General',
+                'salary': parse_amount(str(row.get(salary_col, '0'))) if salary_col else 0,
+                'bonus': parse_amount(str(row.get(bonus_col, '0'))) if bonus_col else 0,
+                'email': str(row.get(email_col, '')) if email_col else '',
+                'hire_date': str(row.get(hire_col, '')) if hire_col else '',
+                'status': 'active'
+            }
+            
+            # Parse status
+            if status_col and row.get(status_col):
+                status_val = str(row.get(status_col, '')).lower()
+                if 'leave' in status_val or 'inactive' in status_val:
+                    employee['status'] = 'on_leave'
+                elif 'pending' in status_val:
+                    employee['status'] = 'pending'
+            
+            employees.append(employee)
+        
+        # Save to Firebase
+        await save_company_employees(user_id, employees)
+        
+        # Calculate summary
+        total_payroll = sum(e['salary'] + e['bonus'] for e in employees)
+        
+        return {
+            "success": True,
+            "employees_count": len(employees),
+            "total_payroll": total_payroll,
+            "departments": list(set(e['department'] for e in employees)),
+            "employees": employees
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to parse employee CSV: {str(e)}")
+
+
+@router.post("/payroll/generate-slips")
+async def generate_payroll_slips(
+    request: GeneratePayrollSlipsRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Generate formatted payroll slips for all employees."""
+    user_id = current_user["id"]
+    
+    try:
+        employees = await get_company_employees(user_id)
+        company_data = await get_company_data(user_id)
+        
+        if not employees:
+            return {
+                "success": False,
+                "message": "No employees found. Please upload employee data first.",
+                "slips": []
+            }
+        
+        company_name = company_data.get("company_name", "Company") if company_data else "Company"
+        pay_period = request.pay_period
+        
+        payroll_slips = []
+        for emp in employees:
+            monthly_salary = emp.get("salary", 0) / 12
+            monthly_bonus = emp.get("bonus", 0) / 12
+            
+            # Calculate deductions
+            gross_pay = monthly_salary + monthly_bonus
+            federal_tax = gross_pay * 0.22  # 22% federal tax bracket estimate
+            state_tax = gross_pay * 0.05  # 5% state tax estimate
+            social_security = min(gross_pay * 0.062, 9932.40 / 12)  # SS cap
+            medicare = gross_pay * 0.0145
+            health_insurance = 500  # Fixed estimate
+            retirement_401k = gross_pay * 0.06  # 6% 401k contribution
+            
+            total_deductions = federal_tax + state_tax + social_security + medicare + health_insurance + retirement_401k
+            net_pay = gross_pay - total_deductions
+            
+            slip = {
+                "employee_id": emp.get("id"),
+                "employee_name": emp.get("name"),
+                "employee_email": emp.get("email", ""),
+                "department": emp.get("department"),
+                "position": emp.get("role"),
+                "pay_period": pay_period,
+                "pay_date": f"{pay_period}-28",
+                
+                "earnings": {
+                    "base_salary": round(monthly_salary, 2),
+                    "bonus": round(monthly_bonus, 2),
+                    "overtime": 0,
+                    "gross_pay": round(gross_pay, 2)
+                },
+                
+                "deductions": {
+                    "federal_tax": round(federal_tax, 2),
+                    "state_tax": round(state_tax, 2),
+                    "social_security": round(social_security, 2),
+                    "medicare": round(medicare, 2),
+                    "health_insurance": round(health_insurance, 2),
+                    "retirement_401k": round(retirement_401k, 2),
+                    "total_deductions": round(total_deductions, 2)
+                },
+                
+                "net_pay": round(net_pay, 2),
+                
+                "ytd": {
+                    "gross_earnings": round(gross_pay * int(pay_period.split('-')[1]), 2),
+                    "total_deductions": round(total_deductions * int(pay_period.split('-')[1]), 2),
+                    "net_pay": round(net_pay * int(pay_period.split('-')[1]), 2)
+                },
+                
+                "company_name": company_name
+            }
+            
+            payroll_slips.append(slip)
+        
+        # Calculate totals
+        total_gross = sum(s["earnings"]["gross_pay"] for s in payroll_slips)
+        total_deductions = sum(s["deductions"]["total_deductions"] for s in payroll_slips)
+        total_net = sum(s["net_pay"] for s in payroll_slips)
+        
+        return {
+            "success": True,
+            "pay_period": pay_period,
+            "company_name": company_name,
+            "slips": payroll_slips,
+            "summary": {
+                "total_employees": len(payroll_slips),
+                "total_gross_pay": round(total_gross, 2),
+                "total_deductions": round(total_deductions, 2),
+                "total_net_pay": round(total_net, 2)
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate payroll slips: {str(e)}")
+
+
+@router.post("/budgets/set")
+async def set_company_budget(
+    request: SetBudgetRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Set monthly budget and generate AI-powered budget plan."""
+    user_id = current_user["id"]
+    
+    try:
+        company_data = await get_company_data(user_id)
+        employees = await get_company_employees(user_id)
+        transactions = await get_company_transactions(user_id, 200)
+        
+        monthly_budget = request.monthly_budget
+        
+        # Calculate historical spending patterns
+        expense_by_category = {}
+        for txn in transactions:
+            if txn.get("type") == "outflow":
+                cat = txn.get("category", "Other")
+                expense_by_category[cat] = expense_by_category.get(cat, 0) + abs(txn.get("amount", 0))
+        
+        total_historical = sum(expense_by_category.values())
+        
+        # Calculate employee costs
+        total_payroll = sum(e.get("salary", 0) + e.get("bonus", 0) for e in employees) / 12  # Monthly
+        
+        # Generate AI budget allocation
+        if request.department_allocations:
+            # Use provided allocations
+            allocations = request.department_allocations
+        else:
+            # AI-generated allocation based on best practices
+            remaining_budget = monthly_budget - total_payroll
+            
+            allocations = {
+                "Payroll": round(total_payroll, 0),
+                "Operations": round(remaining_budget * 0.25, 0),
+                "Marketing": round(remaining_budget * 0.15, 0),
+                "Technology": round(remaining_budget * 0.15, 0),
+                "Office & Admin": round(remaining_budget * 0.10, 0),
+                "Professional Services": round(remaining_budget * 0.08, 0),
+                "Training & Development": round(remaining_budget * 0.05, 0),
+                "Contingency": round(remaining_budget * 0.12, 0),
+                "Miscellaneous": round(remaining_budget * 0.10, 0)
+            }
+        
+        # Create budget entries
+        budgets = []
+        for dept, allocated in allocations.items():
+            historical_spent = expense_by_category.get(dept, 0) / 3  # Assume 3 months data
+            
+            budgets.append({
+                "id": f"budget_{dept.lower().replace(' ', '_')}",
+                "department": dept,
+                "allocated": allocated,
+                "spent": round(historical_spent, 0),
+                "forecast": round(historical_spent * 1.1, 0)  # 10% growth forecast
+            })
+        
+        # Save budgets to Firebase
+        await save_company_budgets(user_id, budgets)
+        
+        # Generate AI recommendations
+        recommendations = []
+        
+        if total_payroll > monthly_budget * 0.5:
+            recommendations.append({
+                "type": "warning",
+                "title": "High Payroll Ratio",
+                "message": f"Payroll ({round(total_payroll/monthly_budget*100)}%) exceeds 50% of budget. Consider efficiency improvements.",
+                "impact": "Critical"
+            })
+        
+        if total_historical > 0:
+            if monthly_budget < total_historical / 3:
+                recommendations.append({
+                    "type": "warning",
+                    "title": "Budget May Be Insufficient",
+                    "message": f"Historical monthly spending avg ${total_historical/3:,.0f} exceeds budget ${monthly_budget:,.0f}",
+                    "impact": "High"
+                })
+            else:
+                savings_potential = monthly_budget - (total_historical / 3)
+                recommendations.append({
+                    "type": "success",
+                    "title": "Budget Allows for Growth",
+                    "message": f"${savings_potential:,.0f} available for growth initiatives or savings",
+                    "impact": "Positive"
+                })
+        
+        recommendations.append({
+            "type": "optimization",
+            "title": "AI Budget Optimization",
+            "message": "Budget allocated based on industry best practices: 50% fixed costs, 30% variable, 20% growth/contingency",
+            "impact": "Optimized"
+        })
+        
+        return {
+            "success": True,
+            "monthly_budget": monthly_budget,
+            "allocations": allocations,
+            "budgets": budgets,
+            "recommendations": recommendations,
+            "summary": {
+                "total_allocated": sum(allocations.values()),
+                "payroll_percentage": round(total_payroll / monthly_budget * 100, 1) if monthly_budget > 0 else 0,
+                "historical_avg_spend": round(total_historical / 3, 0) if total_historical > 0 else 0
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to set budget: {str(e)}")
+
+
+@router.post("/fraud/analyze-csv")
+async def analyze_csv_for_fraud(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Upload transaction CSV and analyze for fraud patterns."""
+    user_id = current_user["id"]
+    
+    if not file.filename.endswith('.csv'):
+        raise HTTPException(status_code=400, detail="Only CSV files are supported")
+    
+    try:
+        content = await file.read()
+        content_str = content.decode('utf-8-sig')
+        
+        reader = csv.DictReader(io.StringIO(content_str))
+        headers = reader.fieldnames or []
+        rows = list(reader)
+        
+        if not rows:
+            raise HTTPException(status_code=400, detail="CSV file is empty")
+        
+        # Parse transactions
+        transactions = []
+        
+        # Find columns
+        date_col = next((h for h in headers if any(kw in h.lower() for kw in ['date', 'posted', 'trans'])), None)
+        desc_col = next((h for h in headers if any(kw in h.lower() for kw in ['desc', 'memo', 'particular', 'detail', 'narration'])), None)
+        amount_col = next((h for h in headers if any(kw in h.lower() for kw in ['amount', 'value'])), None)
+        debit_col = next((h for h in headers if 'debit' in h.lower() or 'withdrawal' in h.lower()), None)
+        credit_col = next((h for h in headers if 'credit' in h.lower() or 'deposit' in h.lower()), None)
+        vendor_col = next((h for h in headers if any(kw in h.lower() for kw in ['vendor', 'payee', 'merchant', 'recipient'])), None)
+        category_col = next((h for h in headers if any(kw in h.lower() for kw in ['category', 'type', 'class'])), None)
+        
+        for i, row in enumerate(rows):
+            date = str(row.get(date_col, '')) if date_col else ''
+            description = str(row.get(desc_col, '')) if desc_col else str(row.get(headers[1] if len(headers) > 1 else headers[0], ''))
+            
+            # Parse amount
+            if debit_col and credit_col:
+                debit = parse_amount(str(row.get(debit_col, '0')))
+                credit = parse_amount(str(row.get(credit_col, '0')))
+                amount = credit - debit if credit > 0 else -debit
+                txn_type = "inflow" if credit > 0 else "outflow"
+            elif amount_col:
+                amount = parse_amount(str(row.get(amount_col, '0')))
+                txn_type = "inflow" if amount >= 0 else "outflow"
+            else:
+                amount = 0
+                txn_type = "unknown"
+            
+            vendor = str(row.get(vendor_col, '')) if vendor_col else ''
+            if not vendor and description:
+                # Extract vendor from description
+                vendor = description.split(' ')[0] if description else ''
+            
+            transactions.append({
+                "id": f"txn_{i+1}",
+                "row_number": i + 2,  # +2 for header and 1-indexing
+                "date": date,
+                "description": description,
+                "amount": abs(amount),
+                "type": txn_type,
+                "vendor": vendor,
+                "category": str(row.get(category_col, 'Uncategorized')) if category_col else 'Uncategorized',
+                "original_row": dict(row)
+            })
+        
+        # Save transactions
+        await save_company_transactions(user_id, transactions)
+        
+        # FRAUD ANALYSIS
+        fraud_alerts = []
+        
+        # 1. Duplicate detection
+        seen_patterns = {}
+        for txn in transactions:
+            pattern = f"{txn['amount']}_{txn['vendor']}_{txn['description'][:30]}"
+            if pattern in seen_patterns and txn['amount'] > 100:
+                fraud_alerts.append({
+                    "id": f"fraud_dup_{len(fraud_alerts)}",
+                    "row_number": txn["row_number"],
+                    "severity": "medium",
+                    "type": "Duplicate Transaction",
+                    "description": f"Possible duplicate: {txn['description'][:50]}",
+                    "amount": txn["amount"],
+                    "timestamp": txn["date"],
+                    "status": "pending",
+                    "aiConfidence": 82,
+                    "suggestedAction": f"Compare with row {seen_patterns[pattern]['row_number']}"
+                })
+            seen_patterns[pattern] = txn
+        
+        # 2. Unusual amount detection
+        outflow_amounts = [t["amount"] for t in transactions if t["type"] == "outflow" and t["amount"] > 0]
+        if outflow_amounts:
+            avg_amount = sum(outflow_amounts) / len(outflow_amounts)
+            std_dev = (sum((a - avg_amount) ** 2 for a in outflow_amounts) / len(outflow_amounts)) ** 0.5 if len(outflow_amounts) > 1 else avg_amount * 0.5
+            
+            for txn in transactions:
+                if txn["type"] == "outflow" and txn["amount"] > avg_amount + 2 * std_dev:
+                    fraud_alerts.append({
+                        "id": f"fraud_unusual_{len(fraud_alerts)}",
+                        "row_number": txn["row_number"],
+                        "severity": "high" if txn["amount"] > avg_amount + 3 * std_dev else "medium",
+                        "type": "Unusual Amount",
+                        "description": f"Amount ${txn['amount']:,.0f} is {(txn['amount']-avg_amount)/std_dev:.1f}x std dev above average",
+                        "amount": txn["amount"],
+                        "timestamp": txn["date"],
+                        "status": "pending",
+                        "aiConfidence": 75,
+                        "suggestedAction": "Verify transaction legitimacy"
+                    })
+        
+        # 3. Round number detection (potential kickbacks)
+        for txn in transactions:
+            if txn["type"] == "outflow" and txn["amount"] >= 1000:
+                if txn["amount"] % 1000 == 0 or txn["amount"] % 500 == 0:
+                    fraud_alerts.append({
+                        "id": f"fraud_round_{len(fraud_alerts)}",
+                        "row_number": txn["row_number"],
+                        "severity": "low",
+                        "type": "Round Number",
+                        "description": f"Suspiciously round amount: ${txn['amount']:,.0f}",
+                        "amount": txn["amount"],
+                        "timestamp": txn["date"],
+                        "status": "pending",
+                        "aiConfidence": 45,
+                        "suggestedAction": "Review for potential invoice manipulation"
+                    })
+        
+        # 4. Weekend/Holiday transactions
+        for txn in transactions:
+            if txn["date"] and txn["type"] == "outflow" and txn["amount"] > 5000:
+                try:
+                    from datetime import datetime
+                    date_formats = ['%Y-%m-%d', '%m/%d/%Y', '%d/%m/%Y', '%Y/%m/%d']
+                    for fmt in date_formats:
+                        try:
+                            parsed_date = datetime.strptime(txn["date"], fmt)
+                            if parsed_date.weekday() >= 5:  # Saturday or Sunday
+                                fraud_alerts.append({
+                                    "id": f"fraud_weekend_{len(fraud_alerts)}",
+                                    "row_number": txn["row_number"],
+                                    "severity": "medium",
+                                    "type": "Weekend Transaction",
+                                    "description": f"Large payment on weekend: {txn['description'][:40]}",
+                                    "amount": txn["amount"],
+                                    "timestamp": txn["date"],
+                                    "status": "pending",
+                                    "aiConfidence": 60,
+                                    "suggestedAction": "Verify authorization for weekend payment"
+                                })
+                            break
+                        except:
+                            continue
+                except:
+                    pass
+        
+        # 5. Vendor frequency analysis
+        vendor_count = {}
+        for txn in transactions:
+            if txn["vendor"] and txn["type"] == "outflow":
+                vendor_count[txn["vendor"]] = vendor_count.get(txn["vendor"], 0) + 1
+        
+        for vendor, count in vendor_count.items():
+            if count > 10:  # More than 10 transactions to same vendor
+                total_to_vendor = sum(t["amount"] for t in transactions if t["vendor"] == vendor)
+                fraud_alerts.append({
+                    "id": f"fraud_vendor_{len(fraud_alerts)}",
+                    "row_number": 0,
+                    "severity": "medium" if count > 20 else "low",
+                    "type": "High Vendor Frequency",
+                    "description": f"{count} transactions to {vendor} totaling ${total_to_vendor:,.0f}",
+                    "amount": total_to_vendor,
+                    "timestamp": "Multiple",
+                    "status": "pending",
+                    "aiConfidence": 55,
+                    "suggestedAction": "Review vendor relationship and transaction patterns"
+                })
+        
+        # Save fraud alerts
+        if fraud_alerts:
+            await save_fraud_alerts(user_id, fraud_alerts)
+        
+        # Calculate risk score
+        risk_score = min(100, len(fraud_alerts) * 8 + 
+                        sum(15 for a in fraud_alerts if a["severity"] == "high") +
+                        sum(8 for a in fraud_alerts if a["severity"] == "medium"))
+        
+        return {
+            "success": True,
+            "transactions_analyzed": len(transactions),
+            "alerts": fraud_alerts,
+            "alerts_count": len(fraud_alerts),
+            "risk_score": risk_score,
+            "summary": {
+                "total_transactions": len(transactions),
+                "total_inflow": sum(t["amount"] for t in transactions if t["type"] == "inflow"),
+                "total_outflow": sum(t["amount"] for t in transactions if t["type"] == "outflow"),
+                "high_risk_alerts": len([a for a in fraud_alerts if a["severity"] == "high"]),
+                "medium_risk_alerts": len([a for a in fraud_alerts if a["severity"] == "medium"]),
+                "low_risk_alerts": len([a for a in fraud_alerts if a["severity"] == "low"])
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to analyze CSV for fraud: {str(e)}")
 
 
 @router.post("/nudge")

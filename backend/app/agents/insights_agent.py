@@ -7,7 +7,7 @@ This agent analyzes transactions and spending patterns to generate actionable in
 import json
 from typing import Any
 from datetime import datetime
-from google.adk import Agent
+from app.agents.base import Agent
 
 from app.agents.base import create_agent, AgentRunner
 
