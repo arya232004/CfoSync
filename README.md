@@ -270,4 +270,3 @@ The `sample-data/` directory contains test files for development:
 - [FastAPI Documentation](https://fastapi.tiangolo.com)
 - [React Documentation](https://react. dev)
 
-
